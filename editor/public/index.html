@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Creative Stitcher</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Creative Stitcher</h1>
+      <div class="sub">Hook &rarr; Gameplay &rarr; Endcard timeline editor</div>
+    </div>
+    <div class="target-toggle" id="targetToggle">
+      <button data-target="30" class="active">30s</button>
+      <button data-target="60">60s</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="segments">
+      <section class="segment" id="hookSegment">
+        <h2><span class="dot hook"></span>Hook</h2>
+        <select id="hookSelect"></select>
+        <div class="preview"><video id="hookVideo" playsinline></video></div>
+        <div class="trim-slider" id="hookTrim">
+          <div class="trim-track"></div>
+          <div class="trim-fill"></div>
+          <input type="range" class="range-in" min="0" max="1" step="0.01" />
+          <input type="range" class="range-out" min="0" max="1" step="0.01" />
+        </div>
+        <div class="numbers">
+          <span>In: <b id="hookInLabel">0.0s</b></span>
+          <span>Out: <b id="hookOutLabel">0.0s</b></span>
+          <span>Output: <b id="hookLenLabel">0.0s</b></span>
+        </div>
+        <div class="speed-row">
+          <label>Speed</label>
+          <input type="range" id="hookSpeedRange" min="0.25" max="3" step="0.05" value="1" />
+          <span class="speed-label" id="hookSpeedLabel">1.00x</span>
+        </div>
+        <div class="speed-presets" id="hookSpeedPresets">
+          <button data-speed="0.5">0.5x</button>
+          <button data-speed="1" class="active">1x</button>
+          <button data-speed="1.5">1.5x</button>
+          <button data-speed="2">2x</button>
+        </div>
+        <div class="controls-row">
+          <button class="secondary" id="hookPlayBtn">▶ Preview trim</button>
+        </div>
+      </section>
+
+      <section class="segment" id="gpSegment">
+        <h2><span class="dot gp"></span>Gameplay</h2>
+        <select id="gpSelect"></select>
+        <div class="preview"><video id="gpVideo" playsinline></video></div>
+        <div class="trim-slider" id="gpTrim">
+          <div class="trim-track"></div>
+          <div class="trim-fill"></div>
+          <input type="range" class="range-in" min="0" max="1" step="0.01" />
+          <input type="range" class="range-out" min="0" max="1" step="0.01" />
+        </div>
+        <div class="numbers">
+          <span>In: <b id="gpInLabel">0.0s</b></span>
+          <span>Out: <b id="gpOutLabel">0.0s</b></span>
+          <span>Output: <b id="gpLenLabel">0.0s</b></span>
+        </div>
+        <div class="speed-row">
+          <label>Speed</label>
+          <input type="range" id="gpSpeedRange" min="0.25" max="3" step="0.05" value="1" />
+          <span class="speed-label" id="gpSpeedLabel">1.00x</span>
+        </div>
+        <div class="speed-presets" id="gpSpeedPresets">
+          <button data-speed="0.5">0.5x</button>
+          <button data-speed="1" class="active">1x</button>
+          <button data-speed="1.5">1.5x</button>
+          <button data-speed="2">2x</button>
+        </div>
+        <div class="controls-row">
+          <button class="secondary" id="gpPlayBtn">▶ Preview trim</button>
+          <button class="secondary" id="autoFitBtn">Auto-fit to target</button>
+        </div>
+      </section>
+
+      <section class="segment" id="endSegment">
+        <h2><span class="dot end"></span>Endcard</h2>
+        <select id="endSelect"></select>
+        <div class="preview"><img id="endImg" style="display:none" /><video id="endVideo" playsinline style="display:none"></video></div>
+        <div id="endTrimWrap" style="display:none">
+          <div class="trim-slider" id="endTrim">
+            <div class="trim-track"></div>
+            <div class="trim-fill"></div>
+            <input type="range" class="range-in" min="0" max="1" step="0.01" />
+            <input type="range" class="range-out" min="0" max="1" step="0.01" />
+          </div>
+          <div class="numbers">
+            <span>In: <b id="endInLabel">0.0s</b></span>
+            <span>Out: <b id="endOutLabel">0.0s</b></span>
+          </div>
+          <div class="speed-row">
+            <label>Speed</label>
+            <input type="range" id="endSpeedRange" min="0.25" max="3" step="0.05" value="1" />
+            <span class="speed-label" id="endSpeedLabel">1.00x</span>
+          </div>
+          <div class="speed-presets" id="endSpeedPresets">
+            <button data-speed="0.5">0.5x</button>
+            <button data-speed="1" class="active">1x</button>
+            <button data-speed="1.5">1.5x</button>
+            <button data-speed="2">2x</button>
+          </div>
+        </div>
+        <div class="duration-input" id="endDurationWrap">
+          <label for="endDuration">Hold for</label>
+          <input type="number" id="endDuration" min="0.5" step="0.5" value="2" />
+          <span>seconds</span>
+        </div>
+        <div class="numbers">
+          <span>Output: <b id="endLenLabel">2.0s</b></span>
+        </div>
+      </section>
+    </div>
+
+    <div class="timeline-card">
+      <div class="order-row">
+        <span class="order-label">Sequence order (drag to reorder):</span>
+        <div class="order-chips" id="orderChips"></div>
+      </div>
+      <div class="timeline-bar" id="timelineBar"></div>
+      <div class="timeline-footer">
+        <div class="total-readout" id="totalReadout">Total: <b>0.0s</b> / target 30s</div>
+        <div class="actions">
+          <button class="secondary" id="previewAllBtn">▶ Preview full sequence</button>
+          <button class="primary" id="exportBtn">Export</button>
+        </div>
+      </div>
+      <div class="status-line" id="statusLine"></div>
+      <div class="result" id="resultRow">
+        <video id="resultVideo" controls></video>
+        <div>
+          <div>Export complete.</div>
+          <a id="resultLink" href="#" target="_blank">Open / download</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="exports-card">
+      <h3>Past exports</h3>
+      <div class="exports-list" id="exportsList"></div>
+    </div>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>
