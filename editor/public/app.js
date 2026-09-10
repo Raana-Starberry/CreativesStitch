@@ -378,7 +378,8 @@ el("targetToggle").addEventListener("click", (e) => {
   [...el("targetToggle").children].forEach((b) => b.classList.remove("active"));
   btn.classList.add("active");
   state.target = parseInt(btn.dataset.target, 10);
-  refreshTimeline();
+  if (state.hook && state.gp && state.end) autoFitGameplay();
+  else refreshTimeline();
 });
 
 el("autoFitBtn").addEventListener("click", autoFitGameplay);
