@@ -153,7 +153,9 @@ function loadGp(item) {
   gpSpeed.apply(1);
   syncGpLabels();
   refreshTimeline();
-  if (el("batchGpName")) el("batchGpName").textContent = item.name;
+  const idx = state.assets.gameplays.indexOf(item);
+  if (el("gpSelect")) el("gpSelect").value = idx;
+  if (el("batchGpSelect")) el("batchGpSelect").value = idx;
 }
 
 function loadEnd(item) {
@@ -544,6 +546,7 @@ async function init() {
 
   populateSelect(el("hookSelect"), state.assets.hooks);
   populateSelect(el("gpSelect"), state.assets.gameplays);
+  populateSelect(el("batchGpSelect"), state.assets.gameplays);
   populateSelect(el("endSelect"), state.assets.endcards);
 
   if (state.assets.hooks.length) loadHook(state.assets.hooks[0]);
@@ -552,6 +555,7 @@ async function init() {
 
   el("hookSelect").addEventListener("change", (e) => loadHook(state.assets.hooks[e.target.value]));
   el("gpSelect").addEventListener("change", (e) => loadGp(state.assets.gameplays[e.target.value]));
+  el("batchGpSelect").addEventListener("change", (e) => loadGp(state.assets.gameplays[e.target.value]));
   el("endSelect").addEventListener("change", (e) => loadEnd(state.assets.endcards[e.target.value]));
 
   renderOrderChips();

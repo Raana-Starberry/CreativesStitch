@@ -146,9 +146,13 @@
     <div class="batch-card">
       <h3>Batch export</h3>
       <div class="batch-desc">
-        Pick 1-10 hooks below. Each one is stitched in full against the current
-        <b>Gameplay</b> (<span id="batchGpName">-</span>), <b>Endcard</b>, sequence order, and speeds set above,
-        with gameplay auto-fit per hook to hit the <span id="batchTargetName">30</span>s target.
+        Pick 1-10 hooks below, plus the Gameplay to pair them with. Uses the current
+        <b>Endcard</b>, sequence order, and speeds set above, with gameplay auto-fit per hook to hit the
+        <span id="batchTargetName">30</span>s target.
+      </div>
+      <div class="batch-gp-row">
+        <label for="batchGpSelect">Gameplay</label>
+        <select id="batchGpSelect"></select>
       </div>
       <div class="batch-hook-list" id="batchHookList"></div>
       <div class="batch-actions">
