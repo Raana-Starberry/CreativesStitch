@@ -367,10 +367,23 @@ async function loadExportsList() {
     const row = document.createElement("div");
     row.className = "row";
     const sizeMb = (f.size / 1e6).toFixed(1);
-    row.innerHTML = `<span>${f.name} <span style="color:var(--muted)">(${sizeMb} MB)</span></span><a href="${f.url}" target="_blank">open</a>`;
+    row.innerHTML = `<span>${f.name} <span style="color:var(--muted)">(${sizeMb} MB)</span></span>
+      <span class="links"><a href="${f.url}" target="_blank">open</a><a class="row-delete" data-name="${f.name}">delete</a></span>`;
     list.appendChild(row);
   });
+  list.querySelectorAll(".row-delete").forEach((link) => {
+    link.addEventListener("click", async () => {
+      await fetch(`/exports/${encodeURIComponent(link.dataset.name)}`, { method: "DELETE" });
+      loadExportsList();
+    });
+  });
 }
+
+el("clearExportsBtn").addEventListener("click", async () => {
+  if (!confirm("Delete all exported videos? This can't be undone.")) return;
+  await fetch("/api/exports", { method: "DELETE" });
+  loadExportsList();
+});
 
 // --- target toggle ---
 el("targetToggle").addEventListener("click", (e) => {

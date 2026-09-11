@@ -265,6 +265,20 @@ const server = http.createServer((req, res) => {
     return streamFile(req, res, full);
   }
 
+  if (url.pathname === "/api/exports" && req.method === "DELETE") {
+    const files = fs.readdirSync(EXPORT_DIR).filter((f) => f.toLowerCase().endsWith(".mp4"));
+    files.forEach((f) => fs.unlinkSync(path.join(EXPORT_DIR, f)));
+    return sendJSON(res, 200, { deleted: files.length });
+  }
+
+  if (url.pathname.startsWith("/exports/") && req.method === "DELETE") {
+    const name = decodeURIComponent(url.pathname.slice("/exports/".length));
+    const full = path.join(EXPORT_DIR, name);
+    if (!full.startsWith(EXPORT_DIR + path.sep) || !fs.existsSync(full)) return sendJSON(res, 404, { error: "not found" });
+    fs.unlinkSync(full);
+    return sendJSON(res, 200, { ok: true });
+  }
+
   res.writeHead(404);
   res.end("not found");
 });

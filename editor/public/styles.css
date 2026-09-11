@@ -446,8 +446,13 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   border-radius: 10px;
   padding: 16px;
 }
-.exports-card h3 { margin: 0 0 10px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.exports-card h3 { margin: 0; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.exports-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+button.danger { background: transparent; border: 1px solid var(--danger); color: var(--danger); }
+button.danger:hover { background: var(--danger); color: white; }
 .exports-list { display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto; }
-.exports-list .row { display: flex; justify-content: space-between; align-items: center; font-size: 13px; padding: 6px 8px; border-radius: 6px; }
+.exports-list .row { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 13px; padding: 6px 8px; border-radius: 6px; }
 .exports-list .row:hover { background: var(--panel-2); }
+.exports-list .row .links { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .exports-list a { color: var(--accent); text-decoration: none; }
+.exports-list .row-delete { color: var(--danger); text-decoration: none; cursor: pointer; }
