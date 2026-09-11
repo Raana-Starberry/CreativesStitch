@@ -408,8 +408,26 @@ async function loadExportsList() {
   });
 }
 
-el("clearExportsBtn").addEventListener("click", async () => {
-  if (!confirm("Clear this list? The video files stay in the Exports folder.")) return;
+// Two-click arm/confirm instead of window.confirm() -- native dialogs are
+// silently suppressed inside sandboxed preview panes, which made this button
+// look broken (it was waiting on a confirm() that could never resolve true).
+let clearArmed = false;
+let clearArmTimer = null;
+const clearBtn = el("clearExportsBtn");
+const clearBtnDefaultText = clearBtn.textContent;
+clearBtn.addEventListener("click", async () => {
+  if (!clearArmed) {
+    clearArmed = true;
+    clearBtn.textContent = "Click again to confirm";
+    clearArmTimer = setTimeout(() => {
+      clearArmed = false;
+      clearBtn.textContent = clearBtnDefaultText;
+    }, 4000);
+    return;
+  }
+  clearTimeout(clearArmTimer);
+  clearArmed = false;
+  clearBtn.textContent = clearBtnDefaultText;
   await fetch("/api/exports", { method: "DELETE" });
   loadExportsList();
 });
