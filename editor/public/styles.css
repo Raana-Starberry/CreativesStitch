@@ -360,6 +360,69 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   color: var(--accent);
 }
 
+.batch-card {
+  margin-top: 20px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+}
+.batch-card h3 { margin: 0 0 8px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.batch-desc { font-size: 12px; color: var(--muted); margin-bottom: 12px; line-height: 1.5; }
+.batch-desc b { color: var(--text); }
+
+.batch-hook-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+}
+.batch-hook-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+.batch-hook-row:hover { background: var(--panel-2); }
+.batch-hook-row input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px; }
+.batch-hook-row .hook-duration { color: var(--muted); font-size: 12px; margin-left: auto; }
+
+.batch-actions {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.batch-results {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 10px;
+}
+.batch-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--panel-2);
+}
+.batch-row .name { flex: 1; }
+.batch-row .state { font-size: 12px; }
+.batch-row.state-queued .state { color: var(--muted); }
+.batch-row.state-rendering .state { color: var(--accent); }
+.batch-row.state-done .state { color: var(--ok); }
+.batch-row.state-error .state { color: var(--danger); }
+.batch-row a { color: var(--accent); text-decoration: none; }
+
 .exports-card {
   margin-top: 20px;
   background: var(--panel);

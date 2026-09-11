@@ -153,6 +153,7 @@ function loadGp(item) {
   gpSpeed.apply(1);
   syncGpLabels();
   refreshTimeline();
+  if (el("batchGpName")) el("batchGpName").textContent = item.name;
 }
 
 function loadEnd(item) {
@@ -330,9 +331,7 @@ el("exportBtn").addEventListener("click", async () => {
     order: state.order,
     hook: { rel: state.hook.rel, in: state.hook.in, out: state.hook.out, speed: state.hook.speed },
     gameplay: { rel: state.gp.rel, in: state.gp.in, out: state.gp.out, speed: state.gp.speed },
-    endcard: state.end.isImage
-      ? { rel: state.end.rel, duration: state.end.holdDuration }
-      : { rel: state.end.rel, duration: (state.end.out - state.end.in) / state.end.speed, in: state.end.in, out: state.end.out, speed: state.end.speed },
+    endcard: buildEndcardPayload(),
   };
 
   try {
@@ -378,6 +377,7 @@ el("targetToggle").addEventListener("click", (e) => {
   [...el("targetToggle").children].forEach((b) => b.classList.remove("active"));
   btn.classList.add("active");
   state.target = parseInt(btn.dataset.target, 10);
+  el("batchTargetName").textContent = state.target;
   if (state.hook && state.gp && state.end) autoFitGameplay();
   else refreshTimeline();
 });
@@ -439,6 +439,104 @@ function moveKeyTo(key, newIndex) {
   refreshTimeline();
 }
 
+// --- batch export: same Gameplay/Endcard/order/speed recipe, run across many hooks ---
+function buildEndcardPayload() {
+  return state.end.isImage
+    ? { rel: state.end.rel, duration: state.end.holdDuration }
+    : { rel: state.end.rel, duration: (state.end.out - state.end.in) / state.end.speed, in: state.end.in, out: state.end.out, speed: state.end.speed };
+}
+
+async function exportOne(hookPayload, gpPayload) {
+  const payload = {
+    target: state.target,
+    order: state.order,
+    hook: hookPayload,
+    gameplay: gpPayload,
+    endcard: buildEndcardPayload(),
+  };
+  const res = await fetch("/api/export", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok || data.error) throw new Error(data.error || "export failed");
+  return data;
+}
+
+function renderBatchHookList() {
+  const wrap = el("batchHookList");
+  wrap.innerHTML = "";
+  state.assets.hooks.forEach((h, idx) => {
+    const row = document.createElement("label");
+    row.className = "batch-hook-row";
+    row.innerHTML = `<input type="checkbox" data-idx="${idx}" /><span>${h.name}</span><span class="hook-duration">${fmt(h.duration)}</span>`;
+    wrap.appendChild(row);
+  });
+}
+
+el("batchSelectAllBtn").addEventListener("click", () => {
+  el("batchHookList").querySelectorAll('input[type="checkbox"]').forEach((cb) => (cb.checked = true));
+});
+el("batchSelectNoneBtn").addEventListener("click", () => {
+  el("batchHookList").querySelectorAll('input[type="checkbox"]').forEach((cb) => (cb.checked = false));
+});
+
+el("batchExportBtn").addEventListener("click", async () => {
+  const selectedIdx = [...el("batchHookList").querySelectorAll('input[type="checkbox"]:checked')]
+    .map((cb) => parseInt(cb.dataset.idx, 10));
+
+  const resultsWrap = el("batchResults");
+  resultsWrap.innerHTML = "";
+
+  if (!selectedIdx.length) {
+    resultsWrap.innerHTML = `<div class="batch-row state-error"><span class="name">Pick at least one hook above.</span></div>`;
+    return;
+  }
+  if (!state.gp || !state.end) {
+    resultsWrap.innerHTML = `<div class="batch-row state-error"><span class="name">Load a Gameplay and Endcard first.</span></div>`;
+    return;
+  }
+
+  const rows = {};
+  selectedIdx.forEach((idx) => {
+    const h = state.assets.hooks[idx];
+    const row = document.createElement("div");
+    row.className = "batch-row state-queued";
+    row.innerHTML = `<span class="name">${h.name}</span><span class="state">Queued</span>`;
+    resultsWrap.appendChild(row);
+    rows[idx] = row;
+  });
+
+  el("batchExportBtn").disabled = true;
+  for (const idx of selectedIdx) {
+    const h = state.assets.hooks[idx];
+    const row = rows[idx];
+    row.className = "batch-row state-rendering";
+    row.innerHTML = `<span class="name">${h.name}</span><span class="state">Rendering...</span>`;
+    try {
+      const hookLen = h.duration / state.hook.speed;
+      const eLen = endLen();
+      const neededOutputLen = state.target - hookLen - eLen;
+      const rawLen = neededOutputLen * state.gp.speed;
+      if (rawLen <= 0.2) {
+        throw new Error(`hook (${fmt(hookLen)}) + endcard (${fmt(eLen)}) leave no room for gameplay at ${state.target}s`);
+      }
+      const gpOut = state.gp.in + rawLen;
+      const hookPayload = { rel: h.rel, in: 0, out: h.duration, speed: state.hook.speed };
+      const gpPayload = { rel: state.gp.rel, in: state.gp.in, out: gpOut, speed: state.gp.speed };
+      const data = await exportOne(hookPayload, gpPayload);
+      row.className = "batch-row state-done";
+      row.innerHTML = `<span class="name">${h.name}</span><span class="state">Done</span><a href="${data.url}" target="_blank">open</a>`;
+    } catch (e) {
+      row.className = "batch-row state-error";
+      row.innerHTML = `<span class="name">${h.name}</span><span class="state">Error: ${e.message}</span>`;
+    }
+  }
+  el("batchExportBtn").disabled = false;
+  loadExportsList();
+});
+
 // --- boot ---
 async function init() {
   const res = await fetch("/api/assets");
@@ -457,6 +555,7 @@ async function init() {
   el("endSelect").addEventListener("change", (e) => loadEnd(state.assets.endcards[e.target.value]));
 
   renderOrderChips();
+  renderBatchHookList();
   loadExportsList();
 }
 init();
