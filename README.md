@@ -29,6 +29,20 @@ Open `http://localhost:5175`. Features:
 - "Auto-fit to target" computes the gameplay length needed to hit 30s or 60s exactly
 - "Preview full sequence" plays the cut back-to-back before you render
 - Export renders via ffmpeg to `Exports/` (1080x1920, normalized crop/scale/fps)
+- Optional "Caption this" / "Caption these" checkboxes add auto-generated captions as a soft subtitle track (see below)
+- "Clear list" / "remove" on Past Exports only hide entries from the list -- the files stay in `Exports/`
+
+### Captions (ElevenLabs)
+
+Checking "Caption this" (single export) or "Caption these" (batch export) transcribes the finished video's audio with [ElevenLabs Speech-to-Text](https://elevenlabs.io/docs/api-reference/speech-to-text) and muxes the result in as a soft/toggleable subtitle track (`..._captioned.mp4`) — the original uncaptioned file is kept too. Requires speech in the audio; silent gameplay/endcard segments just won't have cues.
+
+Setup: create `.env` in the project root (never committed — already in `.gitignore`) with:
+
+```
+ELEVENLABS_API_KEY=your_key_here
+```
+
+Optionally override the STT model with `ELEVENLABS_STT_MODEL` (defaults to `scribe_v1`).
 
 ## Batch script
 

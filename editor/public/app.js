@@ -319,6 +319,18 @@ function runSequence() {
   step();
 }
 
+// --- captioning (ElevenLabs speech-to-text -> soft subtitle track) ---
+async function captionExport(filename) {
+  const res = await fetch("/api/caption", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ file: filename }),
+  });
+  const data = await res.json();
+  if (!res.ok || data.error) throw new Error(data.error || "captioning failed");
+  return data; // { ok, captioned, file?, url?, reason? }
+}
+
 // --- export ---
 el("exportBtn").addEventListener("click", async () => {
   const btn = el("exportBtn");
@@ -350,6 +362,23 @@ el("exportBtn").addEventListener("click", async () => {
     el("resultLink").href = data.url;
     el("resultRow").classList.add("show");
     loadExportsList();
+
+    if (el("captionToggle").checked) {
+      status.textContent = `Done: ${data.file} -- captioning...`;
+      try {
+        const capData = await captionExport(data.file);
+        if (capData.captioned) {
+          status.textContent = `Done: ${capData.file} (captioned)`;
+          el("resultVideo").src = capData.url;
+          el("resultLink").href = capData.url;
+        } else {
+          status.textContent = `Done: ${data.file} -- ${capData.reason || "no captions added"}`;
+        }
+        loadExportsList();
+      } catch (e) {
+        status.textContent = `Done: ${data.file} -- captioning failed: ${e.message}`;
+      }
+    }
   } catch (e) {
     status.className = "status-line error";
     status.textContent = "Error: " + e.message;
@@ -541,8 +570,19 @@ el("batchExportBtn").addEventListener("click", async () => {
       const hookPayload = { rel: h.rel, in: 0, out: h.duration, speed: state.hook.speed };
       const gpPayload = { rel: state.gp.rel, in: state.gp.in, out: gpOut, speed: state.gp.speed };
       const data = await exportOne(hookPayload, gpPayload);
+      let finalUrl = data.url, finalState = "Done";
+      if (el("batchCaptionToggle").checked) {
+        row.innerHTML = `<span class="name">${h.name}</span><span class="state">Captioning...</span>`;
+        try {
+          const capData = await captionExport(data.file);
+          if (capData.captioned) { finalUrl = capData.url; finalState = "Done (captioned)"; }
+          else finalState = `Done (${capData.reason || "no captions"})`;
+        } catch (e) {
+          finalState = `Done, captioning failed: ${e.message}`;
+        }
+      }
       row.className = "batch-row state-done";
-      row.innerHTML = `<span class="name">${h.name}</span><span class="state">Done</span><a href="${data.url}" target="_blank">open</a>`;
+      row.innerHTML = `<span class="name">${h.name}</span><span class="state">${finalState}</span><a href="${finalUrl}" target="_blank">open</a>`;
     } catch (e) {
       row.className = "batch-row state-error";
       row.innerHTML = `<span class="name">${h.name}</span><span class="state">Error: ${e.message}</span>`;

@@ -3,6 +3,7 @@
 // No external dependencies -- Node's stdlib only.
 
 const http = require("http");
+const https = require("https");
 const fs = require("fs");
 const path = require("path");
 const { spawn, spawnSync } = require("child_process");
@@ -12,6 +13,25 @@ const ROOT = path.resolve(__dirname, "..");
 const EXPORT_DIR = path.join(ROOT, "Exports");
 const PUBLIC_DIR = path.join(__dirname, "public");
 const PORT = process.env.PORT || 5175;
+
+// Minimal .env loader (no npm dependency) -- doesn't override already-set env vars.
+(function loadDotEnv() {
+  const envPath = path.join(ROOT, ".env");
+  if (!fs.existsSync(envPath)) return;
+  for (const line of fs.readFileSync(envPath, "utf8").split("\n")) {
+    const m = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/.exec(line);
+    if (!m) continue;
+    const key = m[1];
+    let val = m[2];
+    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+      val = val.slice(1, -1);
+    }
+    if (!(key in process.env)) process.env[key] = val;
+  }
+})();
+
+const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY || "";
+const ELEVENLABS_STT_MODEL = process.env.ELEVENLABS_STT_MODEL || "scribe_v1";
 
 const VIDEO_EXT = new Set([".mp4", ".mov", ".m4v"]);
 const IMAGE_EXT = new Set([".png", ".jpg", ".jpeg"]);
@@ -224,6 +244,104 @@ function runExport(payload, cb) {
   });
 }
 
+// --- ElevenLabs speech-to-text -> soft subtitle track ---
+
+function postMultipart(hostname, urlPath, headers, fields, fileField) {
+  return new Promise((resolve, reject) => {
+    const boundary = "----creativeStitcher" + crypto.randomBytes(8).toString("hex");
+    const parts = [];
+    for (const [name, value] of Object.entries(fields)) {
+      parts.push(Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`
+      ));
+    }
+    parts.push(Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="${fileField.name}"; filename="${fileField.filename}"\r\n` +
+      `Content-Type: ${fileField.contentType}\r\n\r\n`
+    ));
+    parts.push(fileField.data);
+    parts.push(Buffer.from(`\r\n--${boundary}--\r\n`));
+    const body = Buffer.concat(parts);
+
+    const req = https.request({
+      hostname, path: urlPath, method: "POST",
+      headers: { ...headers, "Content-Type": `multipart/form-data; boundary=${boundary}`, "Content-Length": body.length },
+    }, (res) => {
+      let chunks = [];
+      res.on("data", (c) => chunks.push(c));
+      res.on("end", () => {
+        const text = Buffer.concat(chunks).toString("utf8");
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          try { resolve(JSON.parse(text)); } catch (e) { reject(new Error("bad JSON from ElevenLabs: " + text.slice(0, 300))); }
+        } else {
+          reject(new Error(`ElevenLabs ${res.statusCode}: ${text.slice(0, 500)}`));
+        }
+      });
+    });
+    req.on("error", reject);
+    req.write(body);
+    req.end();
+  });
+}
+
+async function transcribeWithElevenLabs(videoPath) {
+  if (!ELEVENLABS_API_KEY) throw new Error("ELEVENLABS_API_KEY not set -- add it to .env in the project root");
+  const data = fs.readFileSync(videoPath);
+  const result = await postMultipart(
+    "api.elevenlabs.io", "/v1/speech-to-text",
+    { "xi-api-key": ELEVENLABS_API_KEY },
+    { model_id: ELEVENLABS_STT_MODEL, timestamps_granularity: "word" },
+    { name: "file", filename: path.basename(videoPath), contentType: "video/mp4", data }
+  );
+  return (result.words || []).filter((w) => w.type === "word" && w.text && w.text.trim());
+}
+
+function srtTime(sec) {
+  const ms = Math.round(sec * 1000);
+  const h = Math.floor(ms / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  const s = Math.floor((ms % 60000) / 1000);
+  const msRem = ms % 1000;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")},${String(msRem).padStart(3, "0")}`;
+}
+
+function wordsToSrt(words) {
+  const MAX_WORDS = 5, MAX_CUE_SEC = 2.5;
+  const cues = [];
+  let cur = [];
+  for (const w of words) {
+    if (cur.length && (cur.length >= MAX_WORDS || w.end - cur[0].start > MAX_CUE_SEC)) {
+      cues.push(cur);
+      cur = [];
+    }
+    cur.push(w);
+  }
+  if (cur.length) cues.push(cur);
+
+  return cues.map((cue, i) => {
+    const text = cue.map((w) => w.text).join(" ").trim();
+    return `${i + 1}\n${srtTime(cue[0].start)} --> ${srtTime(cue[cue.length - 1].end)}\n${text}\n`;
+  }).join("\n");
+}
+
+function muxSoftSubtitles(videoPath, srtPath, outPath, cb) {
+  const args = [
+    "-y", "-loglevel", "error",
+    "-i", videoPath, "-i", srtPath,
+    "-map", "0:v", "-map", "0:a", "-map", "1:s",
+    "-c:v", "copy", "-c:a", "copy", "-c:s", "mov_text",
+    "-metadata:s:s:0", "language=eng",
+    outPath,
+  ];
+  const proc = spawn("ffmpeg", args);
+  let stderr = "";
+  proc.stderr.on("data", (d) => (stderr += d.toString()));
+  proc.on("close", (code) => {
+    if (code === 0) cb(null);
+    else cb(new Error(stderr || `ffmpeg exited ${code}`));
+  });
+}
+
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
 
@@ -253,6 +371,39 @@ const server = http.createServer((req, res) => {
         if (err) return sendJSON(res, 500, { error: err.message });
         sendJSON(res, 200, { ok: true, ...result });
       });
+    });
+    return;
+  }
+
+  if (url.pathname === "/api/caption" && req.method === "POST") {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", async () => {
+      let payload;
+      try { payload = JSON.parse(body); } catch (e) { return sendJSON(res, 400, { error: "bad json" }); }
+      const srcName = payload.file;
+      const srcPath = srcName && path.join(EXPORT_DIR, srcName);
+      if (!srcPath || !srcPath.startsWith(EXPORT_DIR + path.sep) || !fs.existsSync(srcPath)) {
+        return sendJSON(res, 404, { error: "export not found" });
+      }
+      try {
+        const words = await transcribeWithElevenLabs(srcPath);
+        if (!words.length) return sendJSON(res, 200, { ok: true, captioned: false, reason: "no speech detected" });
+
+        const srt = wordsToSrt(words);
+        const srtPath = srcPath.replace(/\.mp4$/i, ".srt");
+        fs.writeFileSync(srtPath, srt);
+
+        const outName = srcName.replace(/\.mp4$/i, "_captioned.mp4");
+        const outPath = path.join(EXPORT_DIR, outName);
+        muxSoftSubtitles(srcPath, srtPath, outPath, (err) => {
+          fs.unlinkSync(srtPath);
+          if (err) return sendJSON(res, 500, { error: err.message });
+          sendJSON(res, 200, { ok: true, captioned: true, file: outName, url: `/exports/${outName}` });
+        });
+      } catch (e) {
+        sendJSON(res, 500, { error: e.message });
+      }
     });
     return;
   }

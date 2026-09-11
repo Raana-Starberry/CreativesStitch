@@ -322,8 +322,20 @@ select {
 
 .actions {
   display: flex;
+  align-items: center;
   gap: 10px;
 }
+
+.caption-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+}
+.caption-toggle input { accent-color: var(--accent); }
 button.primary, button.secondary {
   border: none;
   border-radius: 8px;
@@ -412,6 +424,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .batch-actions {
   display: flex;
+  align-items: center;
   gap: 10px;
   margin-bottom: 4px;
 }
