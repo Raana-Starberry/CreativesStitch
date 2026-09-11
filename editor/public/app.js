@@ -368,7 +368,7 @@ async function loadExportsList() {
     row.className = "row";
     const sizeMb = (f.size / 1e6).toFixed(1);
     row.innerHTML = `<span>${f.name} <span style="color:var(--muted)">(${sizeMb} MB)</span></span>
-      <span class="links"><a href="${f.url}" target="_blank">open</a><a class="row-delete" data-name="${f.name}">delete</a></span>`;
+      <span class="links"><a href="${f.url}" target="_blank">open</a><a class="row-delete" data-name="${f.name}" title="Removes from this list only -- the file stays in Exports/">remove</a></span>`;
     list.appendChild(row);
   });
   list.querySelectorAll(".row-delete").forEach((link) => {
@@ -380,7 +380,7 @@ async function loadExportsList() {
 }
 
 el("clearExportsBtn").addEventListener("click", async () => {
-  if (!confirm("Delete all exported videos? This can't be undone.")) return;
+  if (!confirm("Clear this list? The video files stay in the Exports folder.")) return;
   await fetch("/api/exports", { method: "DELETE" });
   loadExportsList();
 });

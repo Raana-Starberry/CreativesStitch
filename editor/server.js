@@ -21,6 +21,16 @@ const AUDIO_RATE = 48000, AUDIO_LAYOUT = "stereo";
 
 fs.mkdirSync(EXPORT_DIR, { recursive: true });
 
+// Files "removed" from the list are hidden here, not deleted from disk.
+const HIDDEN_FILE = path.join(EXPORT_DIR, ".hidden.json");
+function loadHidden() {
+  try { return JSON.parse(fs.readFileSync(HIDDEN_FILE, "utf8")); }
+  catch { return []; }
+}
+function saveHidden(list) {
+  fs.writeFileSync(HIDDEN_FILE, JSON.stringify(list));
+}
+
 function ffprobe(filePath) {
   const res = spawnSync("ffprobe", [
     "-v", "error",
@@ -248,8 +258,9 @@ const server = http.createServer((req, res) => {
   }
 
   if (url.pathname === "/api/exports" && req.method === "GET") {
+    const hidden = new Set(loadHidden());
     const files = fs.readdirSync(EXPORT_DIR)
-      .filter((f) => f.toLowerCase().endsWith(".mp4"))
+      .filter((f) => f.toLowerCase().endsWith(".mp4") && !hidden.has(f))
       .map((f) => {
         const stat = fs.statSync(path.join(EXPORT_DIR, f));
         return { name: f, url: `/exports/${f}`, size: stat.size, mtime: stat.mtimeMs };
@@ -265,17 +276,22 @@ const server = http.createServer((req, res) => {
     return streamFile(req, res, full);
   }
 
+  // "Delete" only hides an export from the list -- the file stays in Exports/ on disk.
   if (url.pathname === "/api/exports" && req.method === "DELETE") {
-    const files = fs.readdirSync(EXPORT_DIR).filter((f) => f.toLowerCase().endsWith(".mp4"));
-    files.forEach((f) => fs.unlinkSync(path.join(EXPORT_DIR, f)));
-    return sendJSON(res, 200, { deleted: files.length });
+    const hidden = new Set(loadHidden());
+    const visible = fs.readdirSync(EXPORT_DIR).filter((f) => f.toLowerCase().endsWith(".mp4") && !hidden.has(f));
+    visible.forEach((f) => hidden.add(f));
+    saveHidden([...hidden]);
+    return sendJSON(res, 200, { hidden: visible.length });
   }
 
   if (url.pathname.startsWith("/exports/") && req.method === "DELETE") {
     const name = decodeURIComponent(url.pathname.slice("/exports/".length));
     const full = path.join(EXPORT_DIR, name);
     if (!full.startsWith(EXPORT_DIR + path.sep) || !fs.existsSync(full)) return sendJSON(res, 404, { error: "not found" });
-    fs.unlinkSync(full);
+    const hidden = new Set(loadHidden());
+    hidden.add(name);
+    saveHidden([...hidden]);
     return sendJSON(res, 200, { ok: true });
   }
 
