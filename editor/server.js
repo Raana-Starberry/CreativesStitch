@@ -79,6 +79,22 @@ function saveHidden(list) {
   fs.writeFileSync(HIDDEN_FILE, JSON.stringify(list));
 }
 
+// Exports live in one subfolder per recipe (see runExport), so listing needs
+// to walk one level of subdirectories, not just the top of EXPORT_DIR.
+function listExportFiles() {
+  const out = [];
+  for (const entry of fs.readdirSync(EXPORT_DIR, { withFileTypes: true })) {
+    if (entry.isDirectory()) {
+      for (const f of fs.readdirSync(path.join(EXPORT_DIR, entry.name))) {
+        if (f.toLowerCase().endsWith(".mp4")) out.push(path.join(entry.name, f));
+      }
+    } else if (entry.name.toLowerCase().endsWith(".mp4")) {
+      out.push(entry.name); // legacy flat files from before recipe folders existed
+    }
+  }
+  return out;
+}
+
 function ffprobe(filePath) {
   const res = spawnSync("ffprobe", [
     "-v", "error",
@@ -283,9 +299,15 @@ function runExport(payload, cb) {
     ? String(payload.language).toUpperCase() : "EN";
   const today = new Date();
   const dateStr = `${today.getFullYear()}.${String(today.getMonth() + 1).padStart(2, "0")}.${String(today.getDate()).padStart(2, "0")}`;
-  // {Game}_{Dimension}_{Date}_{Language}_{HookName}_{GPName}_{Duration}
-  const outName = `${gameSlug}_${aspectKey}_${dateStr}_${language}_${slug(hookFull)}_${slug(gpFull)}_${target}s.mp4`;
+  // One folder per creative recipe (same naming, minus dimension) holds every
+  // aspect-ratio variant of that recipe together:
+  //   {Game}_{Date}_{Language}_{HookName}_{GPName}_{Duration}s/
+  //     {Game}_{Dimension}_{Date}_{Language}_{HookName}_{GPName}_{Duration}s.mp4
+  const recipeFolder = `${gameSlug}_${dateStr}_${language}_${slug(hookFull)}_${slug(gpFull)}_${target}s`;
+  const fileName = `${gameSlug}_${aspectKey}_${dateStr}_${language}_${slug(hookFull)}_${slug(gpFull)}_${target}s.mp4`;
+  const outName = path.join(recipeFolder, fileName); // relative to EXPORT_DIR -- used as the "file" identifier everywhere
   const outPath = path.join(EXPORT_DIR, outName);
+  fs.mkdirSync(path.dirname(outPath), { recursive: true });
 
   const af = `aformat=sample_rates=${AUDIO_RATE}:channel_layouts=${AUDIO_LAYOUT}`;
 
@@ -604,11 +626,11 @@ const server = http.createServer((req, res) => {
 
   if (url.pathname === "/api/exports" && req.method === "GET") {
     const hidden = new Set(loadHidden());
-    const files = fs.readdirSync(EXPORT_DIR)
-      .filter((f) => f.toLowerCase().endsWith(".mp4") && !hidden.has(f))
+    const files = listExportFiles()
+      .filter((f) => !hidden.has(f))
       .map((f) => {
         const stat = fs.statSync(path.join(EXPORT_DIR, f));
-        return { name: f, url: `/exports/${f}`, size: stat.size, mtime: stat.mtimeMs };
+        return { name: f, url: `/exports/${f.split(path.sep).map(encodeURIComponent).join("/")}`, size: stat.size, mtime: stat.mtimeMs };
       })
       .sort((a, b) => b.mtime - a.mtime);
     return sendJSON(res, 200, { files });
@@ -650,7 +672,7 @@ const server = http.createServer((req, res) => {
   // "Delete" only hides an export from the list -- the file stays in Exports/ on disk.
   if (url.pathname === "/api/exports" && req.method === "DELETE") {
     const hidden = new Set(loadHidden());
-    const visible = fs.readdirSync(EXPORT_DIR).filter((f) => f.toLowerCase().endsWith(".mp4") && !hidden.has(f));
+    const visible = listExportFiles().filter((f) => !hidden.has(f));
     visible.forEach((f) => hidden.add(f));
     saveHidden([...hidden]);
     return sendJSON(res, 200, { hidden: visible.length });
