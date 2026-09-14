@@ -619,11 +619,21 @@ el("batchExportBtn").addEventListener("click", async () => {
 });
 
 // --- CTA button overlay (endcard only) ---
+const CTA_CANVAS_W = 1080; // matches CANVAS_W on the server
+
 function updateCtaPreview() {
   const img = el("ctaPreviewOverlay");
   if (state.cta && state.cta.enabled && state.cta.rel) {
+    // Rendered at "original size" in the export, so the preview scales the
+    // overlay by the image's natural pixel width relative to the real
+    // 1080px-wide canvas, not a fixed percentage.
+    const applyWidth = () => {
+      if (img.naturalWidth) img.style.width = (img.naturalWidth / CTA_CANVAS_W * 100) + "%";
+    };
+    img.onload = applyWidth;
     img.src = mediaUrl(state.cta.rel);
     img.style.display = "block";
+    if (img.complete) applyWidth();
   } else {
     img.style.display = "none";
   }

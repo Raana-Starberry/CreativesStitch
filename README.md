@@ -36,7 +36,7 @@ Open `http://localhost:5175`. Features:
 
 ### CTA button
 
-Checking "Add CTA button" (on by default when a CTA image is found) overlays the selected image from a `cta`-named folder onto the endcard only — never the hook or gameplay — scaled to 65% of the canvas width and anchored bottom-center with a margin. The Endcard preview shows a live overlay so you can see roughly how it'll sit before exporting. Applies to both single and batch export.
+Checking "Add CTA button" (on by default when a CTA image is found) overlays the selected image from a `cta`-named folder onto the endcard only — never the hook or gameplay — at its original pixel size, anchored bottom-center with a margin. The Endcard preview shows a live overlay, scaled proportionally to match, so you can see roughly how it'll sit before exporting. Applies to both single and batch export.
 
 ### Captions (ElevenLabs)
 

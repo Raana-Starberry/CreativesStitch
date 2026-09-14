@@ -178,7 +178,6 @@ function atempoChain(speed) {
   return steps.map((s) => `atempo=${s.toFixed(4)}`).join(",");
 }
 
-const CTA_WIDTH_FRAC = 0.65; // fraction of canvas width
 const CTA_BOTTOM_MARGIN = 160; // px from the bottom edge
 
 function runExport(payload, cb) {
@@ -254,9 +253,8 @@ function runExport(payload, cb) {
   // still source with no fixed duration, so it never runs out).
   if (ctaFull) {
     args.push("-loop", "1", "-i", ctaFull);
-    const ctaW = Math.round(CANVAS_W * CTA_WIDTH_FRAC);
-    filters.push(`[${inputIdx}:v]scale=${ctaW}:-1[cta_img]`);
-    filters.push(`[v_end][cta_img]overlay=(W-w)/2:H-h-${CTA_BOTTOM_MARGIN}:shortest=1[v_end_cta]`);
+    // No scaling -- overlaid at the source image's native pixel size.
+    filters.push(`[v_end][${inputIdx}:v]overlay=(W-w)/2:H-h-${CTA_BOTTOM_MARGIN}:shortest=1[v_end_cta]`);
     segLabels.end.v = "v_end_cta";
     inputIdx++;
   }
