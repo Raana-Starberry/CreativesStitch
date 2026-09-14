@@ -53,8 +53,17 @@ function resolveSubtitlesFfmpeg() {
 const VIDEO_EXT = new Set([".mp4", ".mov", ".m4v"]);
 const IMAGE_EXT = new Set([".png", ".jpg", ".jpeg"]);
 
-const CANVAS_W = 1080, CANVAS_H = 1920, FPS = 30;
+const FPS = 30;
 const AUDIO_RATE = 48000, AUDIO_LAYOUT = "stereo";
+
+const ASPECT_RATIOS = {
+  "9x16": { w: 1080, h: 1920 },
+  "16x9": { w: 1920, h: 1080 },
+  "4x5": { w: 1080, h: 1350 },
+};
+function resolveAspect(key) {
+  return ASPECT_RATIOS[key] || ASPECT_RATIOS["9x16"];
+}
 
 fs.mkdirSync(EXPORT_DIR, { recursive: true });
 
@@ -219,11 +228,14 @@ function runExport(payload, cb) {
   const gpMeta = ffprobe(gpFull);
   const gpNeedsLoop = gpOut > gpMeta.duration + 0.05;
 
+  const aspectKey = Object.prototype.hasOwnProperty.call(ASPECT_RATIOS, payload.aspect) ? payload.aspect : "9x16";
+  const { w: canvasW, h: canvasH } = resolveAspect(aspectKey);
+
   const slug = (p) => path.basename(p, path.extname(p)).replace(/[^A-Za-z0-9]+/g, "");
-  const outName = `${slug(hookFull)}_${slug(gpFull)}_${target}s_${crypto.randomBytes(2).toString("hex")}.mp4`;
+  const outName = `${slug(hookFull)}_${slug(gpFull)}_${target}s_${aspectKey}_${crypto.randomBytes(2).toString("hex")}.mp4`;
   const outPath = path.join(EXPORT_DIR, outName);
 
-  const vf = `scale=${CANVAS_W}:${CANVAS_H}:force_original_aspect_ratio=increase,crop=${CANVAS_W}:${CANVAS_H},setsar=1,fps=${FPS},format=yuv420p`;
+  const vf = `scale=${canvasW}:${canvasH}:force_original_aspect_ratio=increase,crop=${canvasW}:${canvasH},setsar=1,fps=${FPS},format=yuv420p`;
   const af = `aformat=sample_rates=${AUDIO_RATE}:channel_layouts=${AUDIO_LAYOUT}`;
 
   const args = ["-y", "-loglevel", "error"];
@@ -389,16 +401,17 @@ function assTime(sec) {
 }
 
 // A plain SRT has no notion of the video's resolution, so libass assumes a
-// small default canvas and scales font/margin sizes up wildly to match our
-// actual 1080x1920 output. Writing a real .ass file with an explicit
-// PlayResY (matching CANVAS_H) and the style baked in sidesteps that guess
-// entirely -- this is what burned-in captions render from.
-function wordsToAss(words) {
+// small default canvas and scales font/margin sizes up wildly to match the
+// real output. Writing a real .ass file with an explicit PlayResX/PlayResY
+// (matching the actual source video, probed by the caller -- works for any
+// aspect ratio) and the style baked in sidesteps that guess entirely -- this
+// is what burned-in captions render from.
+function wordsToAss(words, videoW, videoH) {
   const cues = groupWordsIntoCues(words);
   const header = `[Script Info]
 ScriptType: v4.00+
-PlayResX: ${CANVAS_W}
-PlayResY: ${CANVAS_H}
+PlayResX: ${videoW}
+PlayResY: ${videoH}
 ScaledBorderAndShadow: yes
 
 [V4+ Styles]
@@ -512,7 +525,12 @@ const server = http.createServer((req, res) => {
         if (!words.length) return sendJSON(res, 200, { ok: true, captioned: false, reason: "no speech detected" });
 
         const subsPath = srcPath.replace(/\.mp4$/i, style === "burned" ? ".ass" : ".srt");
-        fs.writeFileSync(subsPath, style === "burned" ? wordsToAss(words) : wordsToSrt(words));
+        if (style === "burned") {
+          const srcMeta = ffprobe(srcPath);
+          fs.writeFileSync(subsPath, wordsToAss(words, srcMeta.width, srcMeta.height));
+        } else {
+          fs.writeFileSync(subsPath, wordsToSrt(words));
+        }
 
         const suffix = style === "burned" ? "_captioned_burned.mp4" : "_captioned.mp4";
         const outName = srcName.replace(/\.mp4$/i, suffix);

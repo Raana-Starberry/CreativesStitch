@@ -18,6 +18,14 @@
   </header>
 
   <main>
+    <div class="aspect-bar">
+      <span class="aspect-label">Export formats:</span>
+      <label class="aspect-chip"><input type="checkbox" class="aspect-check" data-aspect="9x16" checked /> 9:16</label>
+      <label class="aspect-chip"><input type="checkbox" class="aspect-check" data-aspect="16x9" /> 16:9</label>
+      <label class="aspect-chip"><input type="checkbox" class="aspect-check" data-aspect="4x5" /> 4:5</label>
+      <label class="aspect-chip aspect-all"><input type="checkbox" id="aspectAll" /> Select all</label>
+    </div>
+
     <div class="segments">
       <section class="segment" id="hookSegment">
         <h2><span class="dot hook"></span>Hook</h2>
@@ -147,13 +155,7 @@
         </div>
       </div>
       <div class="status-line" id="statusLine"></div>
-      <div class="result" id="resultRow">
-        <video id="resultVideo" controls></video>
-        <div>
-          <div>Export complete.</div>
-          <a id="resultLink" href="#" target="_blank">Open / download</a>
-        </div>
-      </div>
+      <div class="result-list" id="resultList"></div>
     </div>
 
     <div class="batch-card">

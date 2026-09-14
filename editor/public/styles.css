@@ -384,21 +384,58 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .status-line.error { color: var(--danger); }
 .status-line.ok { color: var(--ok); }
 
-.result {
+.result-list {
   margin-top: 14px;
-  display: none;
-  gap: 14px;
-  align-items: flex-start;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
-.result.show { display: flex; }
-.result video {
-  width: 160px;
-  border-radius: 8px;
+.result-list .row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--panel-2);
+}
+.tag {
+  font-size: 11px;
+  color: var(--muted);
   border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 6px;
+  flex-shrink: 0;
+  margin-left: 6px;
 }
-.result a {
-  color: var(--accent);
+.result-list .row .state { flex: 1; color: var(--muted); }
+.result-list .row.state-done .state { color: var(--ok); }
+.result-list .row.state-error .state { color: var(--danger); }
+.result-list a { color: var(--accent); text-decoration: none; flex-shrink: 0; }
+
+.aspect-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
 }
+.aspect-label { font-size: 12px; color: var(--muted); flex-shrink: 0; }
+.aspect-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  user-select: none;
+}
+.aspect-chip input { accent-color: var(--accent); }
+.aspect-all { margin-left: auto; color: var(--muted); font-size: 12px; }
 
 .batch-card {
   margin-top: 20px;

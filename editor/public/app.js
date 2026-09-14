@@ -332,61 +332,81 @@ async function captionExport(filename, style) {
   return data; // { ok, captioned, file?, url?, reason? }
 }
 
+async function maybeApplyCaption(file, url, toggleEl, styleEl, onStatus) {
+  if (!toggleEl.checked) return { url, label: "Done" };
+  if (onStatus) onStatus("Captioning...");
+  try {
+    const capData = await captionExport(file, styleEl.value);
+    if (capData.captioned) return { url: capData.url, label: "Done (captioned)" };
+    return { url, label: `Done (${capData.reason || "no captions"})` };
+  } catch (e) {
+    return { url, label: `Done, captioning failed: ${e.message}` };
+  }
+}
+
+// --- aspect ratio selection ---
+function getSelectedAspects() {
+  return [...document.querySelectorAll(".aspect-check:checked")].map((cb) => cb.dataset.aspect);
+}
+function syncAspectAll() {
+  const boxes = [...document.querySelectorAll(".aspect-check")];
+  el("aspectAll").checked = boxes.length > 0 && boxes.every((cb) => cb.checked);
+}
+document.querySelectorAll(".aspect-check").forEach((cb) => cb.addEventListener("change", syncAspectAll));
+el("aspectAll").addEventListener("change", (e) => {
+  document.querySelectorAll(".aspect-check").forEach((cb) => (cb.checked = e.target.checked));
+});
+
 // --- export ---
 el("exportBtn").addEventListener("click", async () => {
   const btn = el("exportBtn");
   const status = el("statusLine");
-  el("resultRow").classList.remove("show");
+  const resultList = el("resultList");
+  resultList.innerHTML = "";
+
+  const aspects = getSelectedAspects();
+  if (!aspects.length) {
+    status.className = "status-line error";
+    status.textContent = "Pick at least one export format above.";
+    return;
+  }
+
   btn.disabled = true;
   status.className = "status-line";
   status.textContent = "Rendering... this can take a bit for longer gameplay segments.";
 
-  const payload = {
-    target: state.target,
-    order: state.order,
-    hook: { rel: state.hook.rel, in: state.hook.in, out: state.hook.out, speed: state.hook.speed },
-    gameplay: { rel: state.gp.rel, in: state.gp.in, out: state.gp.out, speed: state.gp.speed },
-    endcard: buildEndcardPayload(),
-    cta: buildCtaPayload(),
-  };
+  const rows = {};
+  aspects.forEach((a) => {
+    const row = document.createElement("div");
+    row.className = "row state-queued";
+    row.innerHTML = `<span class="tag">${a}</span><span class="state">Queued</span>`;
+    resultList.appendChild(row);
+    rows[a] = row;
+  });
 
-  try {
-    const res = await fetch("/api/export", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const data = await res.json();
-    if (!res.ok || data.error) throw new Error(data.error || "export failed");
-    status.className = "status-line ok";
-    status.textContent = `Done: ${data.file}`;
-    el("resultVideo").src = data.url;
-    el("resultLink").href = data.url;
-    el("resultRow").classList.add("show");
-    loadExportsList();
+  const hookPayload = { rel: state.hook.rel, in: state.hook.in, out: state.hook.out, speed: state.hook.speed };
+  const gpPayload = { rel: state.gp.rel, in: state.gp.in, out: state.gp.out, speed: state.gp.speed };
 
-    if (el("captionToggle").checked) {
-      status.textContent = `Done: ${data.file} -- captioning...`;
-      try {
-        const capData = await captionExport(data.file, el("captionStyle").value);
-        if (capData.captioned) {
-          status.textContent = `Done: ${capData.file} (captioned)`;
-          el("resultVideo").src = capData.url;
-          el("resultLink").href = capData.url;
-        } else {
-          status.textContent = `Done: ${data.file} -- ${capData.reason || "no captions added"}`;
-        }
-        loadExportsList();
-      } catch (e) {
-        status.textContent = `Done: ${data.file} -- captioning failed: ${e.message}`;
-      }
+  for (const a of aspects) {
+    const row = rows[a];
+    row.innerHTML = `<span class="tag">${a}</span><span class="state">Rendering...</span>`;
+    try {
+      const data = await exportOne(hookPayload, gpPayload, a);
+      const result = await maybeApplyCaption(data.file, data.url, el("captionToggle"), el("captionStyle"), (s) => {
+        row.innerHTML = `<span class="tag">${a}</span><span class="state">${s}</span>`;
+      });
+      row.className = "row state-done";
+      row.innerHTML = `<span class="tag">${a}</span><span class="state">${result.label}</span><a href="${result.url}" target="_blank">open</a>`;
+    } catch (e) {
+      row.className = "row state-error";
+      row.innerHTML = `<span class="tag">${a}</span><span class="state">Error: ${e.message}</span>`;
     }
-  } catch (e) {
-    status.className = "status-line error";
-    status.textContent = "Error: " + e.message;
-  } finally {
-    btn.disabled = false;
   }
+
+  status.className = "status-line ok";
+  status.textContent = `Done: ${aspects.length} format${aspects.length > 1 ? "s" : ""} exported`;
+  btn.disabled = false;
+  loadExportsList();
 });
 
 async function loadExportsList() {
@@ -515,7 +535,7 @@ function buildCtaPayload() {
   return { enabled: true, rel: state.cta.rel };
 }
 
-async function exportOne(hookPayload, gpPayload) {
+async function exportOne(hookPayload, gpPayload, aspect) {
   const payload = {
     target: state.target,
     order: state.order,
@@ -523,6 +543,7 @@ async function exportOne(hookPayload, gpPayload) {
     gameplay: gpPayload,
     endcard: buildEndcardPayload(),
     cta: buildCtaPayload(),
+    aspect,
   };
   const res = await fetch("/api/export", {
     method: "POST",
@@ -555,6 +576,7 @@ el("batchSelectNoneBtn").addEventListener("click", () => {
 el("batchExportBtn").addEventListener("click", async () => {
   const selectedIdx = [...el("batchHookList").querySelectorAll('input[type="checkbox"]:checked')]
     .map((cb) => parseInt(cb.dataset.idx, 10));
+  const aspects = getSelectedAspects();
 
   const resultsWrap = el("batchResults");
   resultsWrap.innerHTML = "";
@@ -563,27 +585,32 @@ el("batchExportBtn").addEventListener("click", async () => {
     resultsWrap.innerHTML = `<div class="batch-row state-error"><span class="name">Pick at least one hook above.</span></div>`;
     return;
   }
+  if (!aspects.length) {
+    resultsWrap.innerHTML = `<div class="batch-row state-error"><span class="name">Pick at least one export format above.</span></div>`;
+    return;
+  }
   if (!state.gp || !state.end) {
     resultsWrap.innerHTML = `<div class="batch-row state-error"><span class="name">Load a Gameplay and Endcard first.</span></div>`;
     return;
   }
 
+  const rowKey = (idx, a) => `${idx}|${a}`;
   const rows = {};
   selectedIdx.forEach((idx) => {
     const h = state.assets.hooks[idx];
-    const row = document.createElement("div");
-    row.className = "batch-row state-queued";
-    row.innerHTML = `<span class="name">${h.name}</span><span class="state">Queued</span>`;
-    resultsWrap.appendChild(row);
-    rows[idx] = row;
+    aspects.forEach((a) => {
+      const row = document.createElement("div");
+      row.className = "batch-row state-queued";
+      row.innerHTML = `<span class="name">${h.name}<span class="tag">${a}</span></span><span class="state">Queued</span>`;
+      resultsWrap.appendChild(row);
+      rows[rowKey(idx, a)] = row;
+    });
   });
 
   el("batchExportBtn").disabled = true;
   for (const idx of selectedIdx) {
     const h = state.assets.hooks[idx];
-    const row = rows[idx];
-    row.className = "batch-row state-rendering";
-    row.innerHTML = `<span class="name">${h.name}</span><span class="state">Rendering...</span>`;
+    let hookPayload, gpPayload;
     try {
       const hookLen = h.duration / state.hook.speed;
       const eLen = endLen();
@@ -593,25 +620,32 @@ el("batchExportBtn").addEventListener("click", async () => {
         throw new Error(`hook (${fmt(hookLen)}) + endcard (${fmt(eLen)}) leave no room for gameplay at ${state.target}s`);
       }
       const gpOut = state.gp.in + rawLen;
-      const hookPayload = { rel: h.rel, in: 0, out: h.duration, speed: state.hook.speed };
-      const gpPayload = { rel: state.gp.rel, in: state.gp.in, out: gpOut, speed: state.gp.speed };
-      const data = await exportOne(hookPayload, gpPayload);
-      let finalUrl = data.url, finalState = "Done";
-      if (el("batchCaptionToggle").checked) {
-        row.innerHTML = `<span class="name">${h.name}</span><span class="state">Captioning...</span>`;
-        try {
-          const capData = await captionExport(data.file, el("batchCaptionStyle").value);
-          if (capData.captioned) { finalUrl = capData.url; finalState = "Done (captioned)"; }
-          else finalState = `Done (${capData.reason || "no captions"})`;
-        } catch (e) {
-          finalState = `Done, captioning failed: ${e.message}`;
-        }
-      }
-      row.className = "batch-row state-done";
-      row.innerHTML = `<span class="name">${h.name}</span><span class="state">${finalState}</span><a href="${finalUrl}" target="_blank">open</a>`;
+      hookPayload = { rel: h.rel, in: 0, out: h.duration, speed: state.hook.speed };
+      gpPayload = { rel: state.gp.rel, in: state.gp.in, out: gpOut, speed: state.gp.speed };
     } catch (e) {
-      row.className = "batch-row state-error";
-      row.innerHTML = `<span class="name">${h.name}</span><span class="state">Error: ${e.message}</span>`;
+      aspects.forEach((a) => {
+        const row = rows[rowKey(idx, a)];
+        row.className = "batch-row state-error";
+        row.innerHTML = `<span class="name">${h.name}<span class="tag">${a}</span></span><span class="state">Error: ${e.message}</span>`;
+      });
+      continue;
+    }
+
+    for (const a of aspects) {
+      const row = rows[rowKey(idx, a)];
+      row.className = "batch-row state-rendering";
+      row.innerHTML = `<span class="name">${h.name}<span class="tag">${a}</span></span><span class="state">Rendering...</span>`;
+      try {
+        const data = await exportOne(hookPayload, gpPayload, a);
+        const result = await maybeApplyCaption(data.file, data.url, el("batchCaptionToggle"), el("batchCaptionStyle"), (s) => {
+          row.innerHTML = `<span class="name">${h.name}<span class="tag">${a}</span></span><span class="state">${s}</span>`;
+        });
+        row.className = "batch-row state-done";
+        row.innerHTML = `<span class="name">${h.name}<span class="tag">${a}</span></span><span class="state">${result.label}</span><a href="${result.url}" target="_blank">open</a>`;
+      } catch (e) {
+        row.className = "batch-row state-error";
+        row.innerHTML = `<span class="name">${h.name}<span class="tag">${a}</span></span><span class="state">Error: ${e.message}</span>`;
+      }
     }
   }
   el("batchExportBtn").disabled = false;

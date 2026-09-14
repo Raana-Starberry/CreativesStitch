@@ -29,7 +29,8 @@ Open `http://localhost:5175`. Features:
 - Drag to reorder the Hook / Gameplay / Endcard sequence
 - "Auto-fit to target" computes the gameplay length needed to hit 30s or 60s exactly
 - "Preview full sequence" plays the cut back-to-back before you render
-- Export renders via ffmpeg to `Exports/` (1080x1920, normalized crop/scale/fps)
+- Export renders via ffmpeg to `Exports/`, normalized crop/scale/fps
+- "Export formats" lets you check any combination of **9:16** (1080x1920), **16:9** (1920x1080), and **4:5** (1080x1350), or "Select all" for all three at once -- one file is rendered per checked format, from the same Hook/Gameplay/Endcard/CTA/caption settings, each cropped and scaled to fill its own canvas (Hook, Gameplay, and Endcard all reflow per format, not just resized). Applies to both single and batch export
 - Optional "Caption this" / "Caption these" checkboxes add auto-generated captions as a soft subtitle track (see below)
 - "Add CTA button" overlays a picked CTA image onto just the endcard segment, with a live preview (see below)
 - "Clear list" / "remove" on Past Exports only hide entries from the list -- the files stay in `Exports/`
