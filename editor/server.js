@@ -89,7 +89,8 @@ function ffprobe(filePath) {
   const data = JSON.parse(res.stdout.toString());
   const duration = parseFloat(data.format?.duration || "0");
   const vstream = (data.streams || []).find((s) => s.codec_type === "video") || {};
-  return { duration, width: vstream.width || null, height: vstream.height || null };
+  const hasAudio = (data.streams || []).some((s) => s.codec_type === "audio");
+  return { duration, width: vstream.width || null, height: vstream.height || null, hasAudio };
 }
 
 function discoverAssets() {
@@ -230,6 +231,24 @@ function buildVideoFilter(filters, srcPad, outPad, canvasW, canvasH, aspectKey, 
   }
 }
 
+// Some source clips (e.g. silent b-roll) have no audio stream at all.
+// Referencing a nonexistent `N:a` pad makes ffmpeg's filtergraph binding
+// fail outright ("matches no streams"), killing the whole export -- not
+// just that segment. When the source has no audio, this pushes a silent
+// anullsrc input instead, so the export still succeeds with silence for
+// that segment (matching how the image-endcard case already behaves).
+// `curIdx` is the index of the segment's video input, already pushed to
+// args; returns the next free input index.
+function addSegmentAudio(args, filters, af, hasAudio, curIdx, outDurSec, speed, outLabel) {
+  if (hasAudio) {
+    filters.push(`[${curIdx}:a]${af},${atempoChain(speed)}[${outLabel}]`);
+    return curIdx + 1;
+  }
+  args.push("-f", "lavfi", "-t", outDurSec.toFixed(3), "-i", `anullsrc=r=${AUDIO_RATE}:cl=${AUDIO_LAYOUT}`);
+  filters.push(`[${curIdx + 1}:a]anull[${outLabel}]`);
+  return curIdx + 2;
+}
+
 function runExport(payload, cb) {
   const { hook, gameplay, endcard, target, cta } = payload;
   const order = Array.isArray(payload.order) && payload.order.length === 3
@@ -253,6 +272,7 @@ function runExport(payload, cb) {
 
   const gpMeta = ffprobe(gpFull);
   const gpNeedsLoop = gpOut > gpMeta.duration + 0.05;
+  const hookMeta = ffprobe(hookFull);
 
   const aspectKey = Object.prototype.hasOwnProperty.call(ASPECT_RATIOS, payload.aspect) ? payload.aspect : "9x16";
   const { w: canvasW, h: canvasH } = resolveAspect(aspectKey);
@@ -277,17 +297,15 @@ function runExport(payload, cb) {
   // hook
   args.push("-ss", hookIn.toFixed(3), "-t", (hookOut - hookIn).toFixed(3), "-i", hookFull);
   buildVideoFilter(filters, `${inputIdx}:v`, "v_hook", canvasW, canvasH, aspectKey, (1 / hookSpeed).toFixed(6));
-  filters.push(`[${inputIdx}:a]${af},${atempoChain(hookSpeed)}[a_hook]`);
+  inputIdx = addSegmentAudio(args, filters, af, hookMeta.hasAudio, inputIdx, (hookOut - hookIn) / hookSpeed, hookSpeed, "a_hook");
   segLabels.hook = { v: "v_hook", a: "a_hook" };
-  inputIdx++;
 
   // gameplay (loop the source if the requested range runs past its end)
   if (gpNeedsLoop) args.push("-stream_loop", "-1");
   args.push("-ss", gpIn.toFixed(3), "-t", (gpOut - gpIn).toFixed(3), "-i", gpFull);
   buildVideoFilter(filters, `${inputIdx}:v`, "v_gp", canvasW, canvasH, aspectKey, (1 / gpSpeed).toFixed(6));
-  filters.push(`[${inputIdx}:a]${af},${atempoChain(gpSpeed)}[a_gp]`);
+  inputIdx = addSegmentAudio(args, filters, af, gpMeta.hasAudio, inputIdx, (gpOut - gpIn) / gpSpeed, gpSpeed, "a_gp");
   segLabels.gp = { v: "v_gp", a: "a_gp" };
-  inputIdx++;
 
   // endcard
   if (isImage) {
@@ -298,10 +316,10 @@ function runExport(payload, cb) {
     filters.push(`[${inputIdx}:a]anull[a_end]`);
     inputIdx++;
   } else {
+    const endMeta = ffprobe(endFull);
     args.push("-ss", (endcard.in || 0).toFixed(3), "-t", (endDur * endSpeed).toFixed(3), "-i", endFull);
     buildVideoFilter(filters, `${inputIdx}:v`, "v_end", canvasW, canvasH, aspectKey, (1 / endSpeed).toFixed(6));
-    filters.push(`[${inputIdx}:a]${af},${atempoChain(endSpeed)}[a_end]`);
-    inputIdx++;
+    inputIdx = addSegmentAudio(args, filters, af, endMeta.hasAudio, inputIdx, endDur, endSpeed, "a_end");
   }
   segLabels.end = { v: "v_end", a: "a_end" };
 

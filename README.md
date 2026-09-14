@@ -29,7 +29,7 @@ Open `http://localhost:5175`. Features:
 - Drag to reorder the Hook / Gameplay / Endcard sequence
 - "Auto-fit to target" computes the gameplay length needed to hit 30s or 60s exactly
 - "Preview full sequence" plays the cut back-to-back before you render
-- Export renders via ffmpeg to `Exports/`, normalized crop/scale/fps
+- Export renders via ffmpeg to `Exports/`, normalized crop/scale/fps. A source clip with no audio track (silent b-roll) gets silence substituted for that segment rather than crashing the export
 - "Export formats" lets you check any combination of **9:16** (1080x1920), **16:9** (1920x1080), and **4:5** (1080x1350), or "Select all" for all three at once -- one file is rendered per checked format, from the same Hook/Gameplay/Endcard/CTA/caption settings. Applies to both single and batch export.
   - 9:16 and 4:5 crop-to-fill (source is usually portrait already, so this just trims the top/bottom or sides)
   - 16:9 uses a blurred-background treatment instead of a hard crop, since force-cropping a portrait source to fill a landscape frame would throw away most of the shot: the full uncropped video fills the canvas height edge-to-edge, centered horizontally, with a blurred full-bleed copy of the same video filling the empty space on the left and right. Applies uniformly to Hook, Gameplay, and Endcard
