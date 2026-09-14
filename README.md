@@ -9,8 +9,9 @@ Source clips live in folders matched by name (add more any time):
 - a folder with `hook` in its name → hook clips
 - a folder with `gp` or `gameplay` in its name → gameplay clips
 - a folder with `end` in its name → endcard image/clip
+- a folder with `cta` in its name → CTA button images (see below)
 
-Currently: [`Hook/`](Hook), [`Gameplays/`](Gameplays), [`endcard/`](endcard).
+Currently: [`Hook/`](Hook), [`Gameplays/`](Gameplays), [`endcard/`](endcard), [`CTA/`](CTA).
 
 ## Timeline editor (recommended)
 
@@ -30,7 +31,12 @@ Open `http://localhost:5175`. Features:
 - "Preview full sequence" plays the cut back-to-back before you render
 - Export renders via ffmpeg to `Exports/` (1080x1920, normalized crop/scale/fps)
 - Optional "Caption this" / "Caption these" checkboxes add auto-generated captions as a soft subtitle track (see below)
+- "Add CTA button" overlays a picked CTA image onto just the endcard segment, with a live preview (see below)
 - "Clear list" / "remove" on Past Exports only hide entries from the list -- the files stay in `Exports/`
+
+### CTA button
+
+Checking "Add CTA button" (on by default when a CTA image is found) overlays the selected image from a `cta`-named folder onto the endcard only — never the hook or gameplay — scaled to 65% of the canvas width and anchored bottom-center with a margin. The Endcard preview shows a live overlay so you can see roughly how it'll sit before exporting. Applies to both single and batch export.
 
 ### Captions (ElevenLabs)
 

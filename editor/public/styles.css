@@ -337,6 +337,24 @@ select {
 }
 .caption-toggle input { accent-color: var(--accent); }
 
+.cta-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.cta-row select { flex: 1; }
+
+.preview img.cta-overlay {
+  position: absolute;
+  left: 50%;
+  bottom: 8.3%; /* matches CTA_BOTTOM_MARGIN / CANVAS_H on the server */
+  width: 65%;   /* matches CTA_WIDTH_FRAC on the server */
+  height: auto;
+  object-fit: contain;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
 .caption-style {
   background: var(--panel-2);
   color: var(--text);

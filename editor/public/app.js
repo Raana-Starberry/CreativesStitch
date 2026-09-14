@@ -3,10 +3,11 @@ const SEG_LABELS = { hook: "Hook", gp: "Gameplay", end: "Endcard" };
 const state = {
   target: 30,
   order: ["hook", "gp", "end"],
-  assets: { hooks: [], gameplays: [], endcards: [] },
+  assets: { hooks: [], gameplays: [], endcards: [], ctas: [] },
   hook: null,   // {rel, duration, in, out, speed}
   gp: null,     // {rel, duration, in, out, speed}
   end: null,    // {rel, isImage, duration, in, out, speed, holdDuration}
+  cta: null,    // {rel, enabled}
 };
 
 const el = (id) => document.getElementById(id);
@@ -346,6 +347,7 @@ el("exportBtn").addEventListener("click", async () => {
     hook: { rel: state.hook.rel, in: state.hook.in, out: state.hook.out, speed: state.hook.speed },
     gameplay: { rel: state.gp.rel, in: state.gp.in, out: state.gp.out, speed: state.gp.speed },
     endcard: buildEndcardPayload(),
+    cta: buildCtaPayload(),
   };
 
   try {
@@ -508,6 +510,11 @@ function buildEndcardPayload() {
     : { rel: state.end.rel, duration: (state.end.out - state.end.in) / state.end.speed, in: state.end.in, out: state.end.out, speed: state.end.speed };
 }
 
+function buildCtaPayload() {
+  if (!state.cta || !state.cta.enabled || !state.cta.rel) return { enabled: false };
+  return { enabled: true, rel: state.cta.rel };
+}
+
 async function exportOne(hookPayload, gpPayload) {
   const payload = {
     target: state.target,
@@ -515,6 +522,7 @@ async function exportOne(hookPayload, gpPayload) {
     hook: hookPayload,
     gameplay: gpPayload,
     endcard: buildEndcardPayload(),
+    cta: buildCtaPayload(),
   };
   const res = await fetch("/api/export", {
     method: "POST",
@@ -610,6 +618,30 @@ el("batchExportBtn").addEventListener("click", async () => {
   loadExportsList();
 });
 
+// --- CTA button overlay (endcard only) ---
+function updateCtaPreview() {
+  const img = el("ctaPreviewOverlay");
+  if (state.cta && state.cta.enabled && state.cta.rel) {
+    img.src = mediaUrl(state.cta.rel);
+    img.style.display = "block";
+  } else {
+    img.style.display = "none";
+  }
+}
+
+el("ctaToggle").addEventListener("change", (e) => {
+  if (!state.cta) state.cta = { rel: null, enabled: false };
+  state.cta.enabled = e.target.checked;
+  updateCtaPreview();
+});
+el("ctaSelect").addEventListener("change", (e) => {
+  const item = state.assets.ctas[e.target.value];
+  if (!item) return;
+  if (!state.cta) state.cta = { rel: null, enabled: false };
+  state.cta.rel = item.rel;
+  updateCtaPreview();
+});
+
 // --- boot ---
 async function init() {
   const res = await fetch("/api/assets");
@@ -619,10 +651,20 @@ async function init() {
   populateSelect(el("gpSelect"), state.assets.gameplays);
   populateSelect(el("batchGpSelect"), state.assets.gameplays);
   populateSelect(el("endSelect"), state.assets.endcards);
+  populateSelect(el("ctaSelect"), state.assets.ctas);
 
   if (state.assets.hooks.length) loadHook(state.assets.hooks[0]);
   if (state.assets.gameplays.length) loadGp(state.assets.gameplays[0]);
   if (state.assets.endcards.length) loadEnd(state.assets.endcards[0]);
+
+  if (state.assets.ctas.length) {
+    state.cta = { rel: state.assets.ctas[0].rel, enabled: true };
+    el("ctaToggle").checked = true;
+  } else {
+    state.cta = { rel: null, enabled: false };
+    el("ctaToggle").disabled = true;
+  }
+  updateCtaPreview();
 
   el("hookSelect").addEventListener("change", (e) => loadHook(state.assets.hooks[e.target.value]));
   el("gpSelect").addEventListener("change", (e) => loadGp(state.assets.gameplays[e.target.value]));

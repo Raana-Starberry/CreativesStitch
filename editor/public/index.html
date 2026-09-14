@@ -85,7 +85,11 @@
       <section class="segment" id="endSegment">
         <h2><span class="dot end"></span>Endcard</h2>
         <select id="endSelect"></select>
-        <div class="preview"><img id="endImg" style="display:none" /><video id="endVideo" playsinline style="display:none"></video></div>
+        <div class="preview">
+          <img id="endImg" style="display:none" />
+          <video id="endVideo" playsinline style="display:none"></video>
+          <img id="ctaPreviewOverlay" class="cta-overlay" style="display:none" />
+        </div>
         <div id="endTrimWrap" style="display:none">
           <div class="trim-slider" id="endTrim">
             <div class="trim-track"></div>
@@ -116,6 +120,10 @@
         </div>
         <div class="numbers">
           <span>Output: <b id="endLenLabel">2.0s</b></span>
+        </div>
+        <div class="cta-row">
+          <label class="caption-toggle"><input type="checkbox" id="ctaToggle" /> Add CTA button</label>
+          <select id="ctaSelect"></select>
         </div>
       </section>
     </div>

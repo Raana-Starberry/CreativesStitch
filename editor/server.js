@@ -82,14 +82,15 @@ function ffprobe(filePath) {
 }
 
 function discoverAssets() {
-  const hooks = [], gameplays = [], endcards = [];
+  const hooks = [], gameplays = [], endcards = [], ctas = [];
   const entries = fs.readdirSync(ROOT, { withFileTypes: true })
     .filter((d) => d.isDirectory() && d.name !== "Exports" && d.name !== "editor" && !d.name.startsWith("."));
 
   for (const dir of entries) {
     const lower = dir.name.toLowerCase();
     let bucket = null;
-    if (lower.includes("hook")) bucket = hooks;
+    if (lower.includes("cta")) bucket = ctas;
+    else if (lower.includes("hook")) bucket = hooks;
     else if (lower.includes("gp") || lower.includes("gameplay")) bucket = gameplays;
     else if (lower.includes("end")) bucket = endcards;
     else continue;
@@ -114,7 +115,7 @@ function discoverAssets() {
       });
     }
   }
-  return { hooks, gameplays, endcards };
+  return { hooks, gameplays, endcards, ctas };
 }
 
 // Whitelist check: resolved path must live inside one of the asset folders.
@@ -177,8 +178,11 @@ function atempoChain(speed) {
   return steps.map((s) => `atempo=${s.toFixed(4)}`).join(",");
 }
 
+const CTA_WIDTH_FRAC = 0.65; // fraction of canvas width
+const CTA_BOTTOM_MARGIN = 160; // px from the bottom edge
+
 function runExport(payload, cb) {
-  const { hook, gameplay, endcard, target } = payload;
+  const { hook, gameplay, endcard, target, cta } = payload;
   const order = Array.isArray(payload.order) && payload.order.length === 3
     ? payload.order : ["hook", "gp", "end"];
 
@@ -186,6 +190,8 @@ function runExport(payload, cb) {
   const gpFull = resolveAssetPath(gameplay.rel);
   const endFull = resolveAssetPath(endcard.rel);
   if (!hookFull || !gpFull || !endFull) return cb(new Error("invalid asset path"));
+
+  const ctaFull = cta && cta.enabled && cta.rel ? resolveAssetPath(cta.rel) : null;
 
   const hookIn = Math.max(0, hook.in), hookOut = Math.max(hookIn + 0.05, hook.out);
   const gpIn = Math.max(0, gameplay.in), gpOut = Math.max(gpIn + 0.05, gameplay.out);
@@ -241,6 +247,19 @@ function runExport(payload, cb) {
     inputIdx++;
   }
   segLabels.end = { v: "v_end", a: "a_end" };
+
+  // CTA button: overlaid only onto the endcard segment's video, positioned
+  // bottom-center. -loop 1 makes the still image supply frames for as long
+  // as the endcard segment needs (image is naturally shorter than a looping
+  // still source with no fixed duration, so it never runs out).
+  if (ctaFull) {
+    args.push("-loop", "1", "-i", ctaFull);
+    const ctaW = Math.round(CANVAS_W * CTA_WIDTH_FRAC);
+    filters.push(`[${inputIdx}:v]scale=${ctaW}:-1[cta_img]`);
+    filters.push(`[v_end][cta_img]overlay=(W-w)/2:H-h-${CTA_BOTTOM_MARGIN}:shortest=1[v_end_cta]`);
+    segLabels.end.v = "v_end_cta";
+    inputIdx++;
+  }
 
   const concatInputs = order.map((key) => `[${segLabels[key].v}][${segLabels[key].a}]`).join("");
   filters.push(`${concatInputs}concat=n=3:v=1:a=1[outv][outa]`);
