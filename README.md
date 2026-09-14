@@ -36,7 +36,7 @@ Open `http://localhost:5175`. Features:
 
 ### CTA button
 
-Checking "Add CTA button" (on by default when a CTA image is found) overlays the selected image from a `cta`-named folder onto the endcard only — never the hook or gameplay — at its original pixel size, centered around 60% down the frame. It pops in with a soft eased scale-in over the first 0.35s, pulses gently (+/-6% size, ~0.9s per cycle) the rest of the time to draw the eye, then scales back out over the last 0.35s of the endcard. The Endcard preview shows a live overlay (static, no animation) scaled proportionally to match, so you can see roughly how it'll sit before exporting. Applies to both single and batch export.
+Checking "Add CTA button" (on by default when a CTA image is found) overlays the selected image from a `cta`-named folder onto the endcard only — never the hook or gameplay — at its original pixel size, centered around 60% down the frame. It pops in with a soft eased scale-in over the first 0.35s, then pulses gently (+/-6% size, ~0.9s per cycle) for the rest of the endcard to draw the eye -- no scale-out, it keeps pulsing right up to the end. The Endcard preview shows a live overlay (static, no animation) scaled proportionally to match, so you can see roughly how it'll sit before exporting. Applies to both single and batch export.
 
 ### Captions (ElevenLabs)
 

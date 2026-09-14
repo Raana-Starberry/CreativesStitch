@@ -179,20 +179,20 @@ function atempoChain(speed) {
 }
 
 const CTA_VERTICAL_FRAC = 0.6; // where the button's vertical center sits, as a fraction of canvas height from the top
-const CTA_SCALE_ANIM_DUR = 0.35; // seconds for the soft scale-in / scale-out
+const CTA_SCALE_ANIM_DUR = 0.35; // seconds for the soft scale-in
 const CTA_PULSE_AMPLITUDE = 0.06; // +/- size wobble during the hold, as a fraction
 const CTA_PULSE_PERIOD = 0.9; // seconds per pulse cycle
 
-// A soft pop: eased 0->1 over the first CTA_SCALE_ANIM_DUR seconds, a gentle
-// continuous "tap me" pulse while held, then eased back to 0 over the last
-// CTA_SCALE_ANIM_DUR seconds. `t` here is local to the CTA image's own input
-// stream, which starts at 0 in step with the endcard segment it's overlaid
-// onto (both begin decoding at the same point, pre-concat), so this lines up
-// correctly with that segment's real duration.
-function ctaScaleExpr(endDur) {
-  const d = endDur.toFixed(3), a = CTA_SCALE_ANIM_DUR;
+// A soft pop: eased 0->1 over the first CTA_SCALE_ANIM_DUR seconds, then a
+// gentle continuous "tap me" pulse for the rest of the endcard -- no
+// scale-out, it stays pulsing right up to the end. `t` here is local to the
+// CTA image's own input stream, which starts at 0 in step with the endcard
+// segment it's overlaid onto (both begin decoding at the same point,
+// pre-concat), so this lines up correctly with that segment's real duration.
+function ctaScaleExpr() {
+  const a = CTA_SCALE_ANIM_DUR;
   const pulse = `1+${CTA_PULSE_AMPLITUDE}*sin(2*PI*(t-${a})/${CTA_PULSE_PERIOD})`;
-  return `max(0.05,if(lt(t,${a}),sin(min(t/${a},1)*PI/2),if(gt(t,${(endDur - CTA_SCALE_ANIM_DUR).toFixed(3)}),sin(max((${d}-t)/${a},0)*PI/2),${pulse})))`;
+  return `max(0.05,if(lt(t,${a}),sin(min(t/${a},1)*PI/2),${pulse}))`;
 }
 
 function runExport(payload, cb) {
@@ -269,7 +269,7 @@ function runExport(payload, cb) {
   // so it never runs out).
   if (ctaFull) {
     args.push("-loop", "1", "-i", ctaFull);
-    const scaleExpr = ctaScaleExpr(endDur);
+    const scaleExpr = ctaScaleExpr();
     filters.push(`[${inputIdx}:v]scale=w='iw*(${scaleExpr})':h='ih*(${scaleExpr})':eval=frame[cta_img]`);
     filters.push(`[v_end][cta_img]overlay=(W-w)/2:H*${CTA_VERTICAL_FRAC}-h/2:shortest=1[v_end_cta]`);
     segLabels.end.v = "v_end_cta";
