@@ -347,12 +347,12 @@ select {
 .preview img.cta-overlay {
   position: absolute;
   left: 50%;
-  bottom: 8.3%; /* matches CTA_BOTTOM_MARGIN / CANVAS_H on the server */
+  top: 60%; /* matches CTA_VERTICAL_FRAC on the server */
   /* width set inline via JS, proportional to the image's natural size vs
      the real export canvas (1080 wide) -- rendered at "original size" */
   height: auto;
   object-fit: contain;
-  transform: translateX(-50%);
+  transform: translate(-50%, -50%);
   pointer-events: none;
 }
 

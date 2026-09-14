@@ -178,7 +178,7 @@ function atempoChain(speed) {
   return steps.map((s) => `atempo=${s.toFixed(4)}`).join(",");
 }
 
-const CTA_BOTTOM_MARGIN = 160; // px from the bottom edge
+const CTA_VERTICAL_FRAC = 0.6; // where the button's vertical center sits, as a fraction of canvas height from the top
 
 function runExport(payload, cb) {
   const { hook, gameplay, endcard, target, cta } = payload;
@@ -254,7 +254,7 @@ function runExport(payload, cb) {
   if (ctaFull) {
     args.push("-loop", "1", "-i", ctaFull);
     // No scaling -- overlaid at the source image's native pixel size.
-    filters.push(`[v_end][${inputIdx}:v]overlay=(W-w)/2:H-h-${CTA_BOTTOM_MARGIN}:shortest=1[v_end_cta]`);
+    filters.push(`[v_end][${inputIdx}:v]overlay=(W-w)/2:H*${CTA_VERTICAL_FRAC}-h/2:shortest=1[v_end_cta]`);
     segLabels.end.v = "v_end_cta";
     inputIdx++;
   }
