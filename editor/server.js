@@ -179,6 +179,17 @@ function atempoChain(speed) {
 }
 
 const CTA_VERTICAL_FRAC = 0.6; // where the button's vertical center sits, as a fraction of canvas height from the top
+const CTA_SCALE_ANIM_DUR = 0.35; // seconds for the soft scale-in / scale-out
+
+// A soft pop: eased 0->1 over the first CTA_SCALE_ANIM_DUR seconds, held at 1,
+// eased back to 0 over the last CTA_SCALE_ANIM_DUR seconds. `t` here is local
+// to the CTA image's own input stream, which starts at 0 in step with the
+// endcard segment it's overlaid onto (both begin decoding at the same point,
+// pre-concat), so this lines up correctly with that segment's real duration.
+function ctaScaleExpr(endDur) {
+  const d = endDur.toFixed(3), a = CTA_SCALE_ANIM_DUR;
+  return `max(0.05,if(lt(t,${a}),sin(min(t/${a},1)*PI/2),if(gt(t,${(endDur - CTA_SCALE_ANIM_DUR).toFixed(3)}),sin(max((${d}-t)/${a},0)*PI/2),1)))`;
+}
 
 function runExport(payload, cb) {
   const { hook, gameplay, endcard, target, cta } = payload;
@@ -248,13 +259,15 @@ function runExport(payload, cb) {
   segLabels.end = { v: "v_end", a: "a_end" };
 
   // CTA button: overlaid only onto the endcard segment's video, positioned
-  // bottom-center. -loop 1 makes the still image supply frames for as long
-  // as the endcard segment needs (image is naturally shorter than a looping
-  // still source with no fixed duration, so it never runs out).
+  // bottom-center with a soft scale-in/scale-out. -loop 1 makes the still
+  // image supply frames for as long as the endcard segment needs (image is
+  // naturally shorter than a looping still source with no fixed duration,
+  // so it never runs out).
   if (ctaFull) {
     args.push("-loop", "1", "-i", ctaFull);
-    // No scaling -- overlaid at the source image's native pixel size.
-    filters.push(`[v_end][${inputIdx}:v]overlay=(W-w)/2:H*${CTA_VERTICAL_FRAC}-h/2:shortest=1[v_end_cta]`);
+    const scaleExpr = ctaScaleExpr(endDur);
+    filters.push(`[${inputIdx}:v]scale=w='iw*(${scaleExpr})':h='ih*(${scaleExpr})':eval=frame[cta_img]`);
+    filters.push(`[v_end][cta_img]overlay=(W-w)/2:H*${CTA_VERTICAL_FRAC}-h/2:shortest=1[v_end_cta]`);
     segLabels.end.v = "v_end_cta";
     inputIdx++;
   }
