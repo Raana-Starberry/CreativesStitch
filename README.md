@@ -32,7 +32,7 @@ Open `http://localhost:5175`. Features:
 - Export renders via ffmpeg to `Exports/`, normalized crop/scale/fps
 - "Export formats" lets you check any combination of **9:16** (1080x1920), **16:9** (1920x1080), and **4:5** (1080x1350), or "Select all" for all three at once -- one file is rendered per checked format, from the same Hook/Gameplay/Endcard/CTA/caption settings. Applies to both single and batch export.
   - 9:16 and 4:5 crop-to-fill (source is usually portrait already, so this just trims the top/bottom or sides)
-  - 16:9 uses a blurred-background treatment instead of a hard crop, since force-cropping a portrait source to fill a landscape frame would throw away most of the shot: the full uncropped video is composited at 60% of the canvas height, centered, with a blurred full-bleed copy of the same video filling the side gaps. Applies uniformly to Hook, Gameplay, and Endcard
+  - 16:9 uses a blurred-background treatment instead of a hard crop, since force-cropping a portrait source to fill a landscape frame would throw away most of the shot: the full uncropped video fills the canvas height edge-to-edge, centered horizontally, with a blurred full-bleed copy of the same video filling the empty space on the left and right. Applies uniformly to Hook, Gameplay, and Endcard
 - Optional "Caption this" / "Caption these" checkboxes add auto-generated captions as a soft subtitle track (see below)
 - "Add CTA button" overlays a picked CTA image onto just the endcard segment, with a live preview (see below)
 - "Clear list" / "remove" on Past Exports only hide entries from the list -- the files stay in `Exports/`

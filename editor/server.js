@@ -205,7 +205,7 @@ function ctaScaleExpr() {
   return `max(0.05,if(lt(t,${a}),sin(min(t/${a},1)*PI/2),${pulse}))`;
 }
 
-const LANDSCAPE_FG_HEIGHT_FRAC = 0.6; // foreground height as a fraction of the 16x9 canvas
+const LANDSCAPE_FG_HEIGHT_FRAC = 1.0; // foreground height as a fraction of the 16x9 canvas -- full height, empty space only on the sides
 const LANDSCAPE_BLUR_SIGMA = 20;
 
 // Builds the scale/crop/format filter chain for one video stream. Sources
