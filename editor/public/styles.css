@@ -57,10 +57,40 @@ header .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
 }
 
 main {
-  padding: 20px;
+  padding: 20px 20px 20px 56px;
   max-width: 1200px;
   margin: 0 auto;
 }
+
+.draggable-section {
+  position: relative;
+}
+.draggable-section.drag-over-before { box-shadow: 0 -2px 0 var(--accent); }
+.draggable-section.drag-over-after { box-shadow: 0 2px 0 var(--accent); }
+.draggable-section.dragging { opacity: 0.4; }
+
+.drag-handle {
+  position: absolute;
+  left: -32px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1;
+  letter-spacing: 2px;
+  cursor: grab;
+  user-select: none;
+}
+.drag-handle:hover { color: var(--text); border-color: var(--accent); }
+.drag-handle:active { cursor: grabbing; }
 
 .segments {
   display: grid;
@@ -255,7 +285,9 @@ select {
   display: flex;
   gap: 8px;
   flex: 1;
+  flex-wrap: wrap;
 }
+
 .order-chip {
   display: flex;
   align-items: center;

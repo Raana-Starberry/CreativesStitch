@@ -736,6 +736,80 @@ el("ctaSelect").addEventListener("change", (e) => {
   updateCtaPreview();
 });
 
+// --- page section order (grab the handle on each card and drag it directly) ---
+const SECTION_IDS = [
+  "sectionFormats",
+  "sectionNaming",
+  "sectionSegments",
+  "sectionTimeline",
+  "sectionBatch",
+  "sectionExports",
+];
+const SECTION_ORDER_KEY = "cs_sectionOrder";
+
+function loadSectionOrder() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SECTION_ORDER_KEY) || "null");
+    if (Array.isArray(saved) && saved.length === SECTION_IDS.length && SECTION_IDS.every((id) => saved.includes(id))) {
+      return saved;
+    }
+  } catch (e) { /* localStorage unavailable or corrupt -- fall back to default order */ }
+  return SECTION_IDS.slice();
+}
+
+function applySectionOrder(order) {
+  const main = document.querySelector("main");
+  order.forEach((id) => {
+    const node = el(id);
+    if (node) main.appendChild(node); // appendChild on an existing node moves it
+  });
+}
+
+function saveCurrentSectionOrder() {
+  const main = document.querySelector("main");
+  const order = [...main.children].map((c) => c.id).filter((id) => SECTION_IDS.includes(id));
+  try { localStorage.setItem(SECTION_ORDER_KEY, JSON.stringify(order)); } catch (e) {}
+}
+
+let draggedSection = null;
+
+function initSectionDragHandles() {
+  const main = document.querySelector("main");
+  SECTION_IDS.forEach((id) => {
+    const section = el(id);
+    if (!section) return;
+    section.classList.add("draggable-section");
+
+    const handle = document.createElement("div");
+    handle.className = "drag-handle";
+    handle.title = "Drag to reorder this section";
+    handle.draggable = true;
+    handle.textContent = "⠿";
+    section.insertBefore(handle, section.firstChild);
+
+    handle.addEventListener("dragstart", (e) => {
+      draggedSection = section;
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", id);
+      requestAnimationFrame(() => section.classList.add("dragging"));
+    });
+    handle.addEventListener("dragend", () => {
+      section.classList.remove("dragging");
+      draggedSection = null;
+      saveCurrentSectionOrder();
+    });
+
+    section.addEventListener("dragover", (e) => {
+      if (!draggedSection || draggedSection === section) return;
+      e.preventDefault();
+      const rect = section.getBoundingClientRect();
+      const before = e.clientY < rect.top + rect.height / 2;
+      main.insertBefore(draggedSection, before ? section : section.nextSibling);
+    });
+    section.addEventListener("drop", (e) => e.preventDefault());
+  });
+}
+
 // --- boot ---
 async function init() {
   const res = await fetch("/api/assets");
@@ -769,5 +843,7 @@ async function init() {
   renderBatchHookList();
   loadExportsList();
   updateNamingPreview();
+  applySectionOrder(loadSectionOrder());
+  initSectionDragHandles();
 }
 init();

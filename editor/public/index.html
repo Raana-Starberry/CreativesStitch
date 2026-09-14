@@ -18,7 +18,7 @@
   </header>
 
   <main>
-    <div class="aspect-bar">
+    <div class="aspect-bar" id="sectionFormats">
       <span class="aspect-label">Export formats:</span>
       <label class="aspect-chip"><input type="checkbox" class="aspect-check" data-aspect="9x16" checked /> 9:16</label>
       <label class="aspect-chip"><input type="checkbox" class="aspect-check" data-aspect="16x9" /> 16:9</label>
@@ -26,7 +26,7 @@
       <label class="aspect-chip aspect-all"><input type="checkbox" id="aspectAll" /> Select all</label>
     </div>
 
-    <div class="aspect-bar">
+    <div class="aspect-bar" id="sectionNaming">
       <span class="aspect-label">File naming:</span>
       <label class="aspect-chip">Game <input type="text" id="gameNameInput" class="game-name-input" placeholder="e.g. GardenGetaway" /></label>
       <label class="aspect-chip">Language
@@ -41,7 +41,7 @@
       <span class="naming-preview" id="namingPreview"></span>
     </div>
 
-    <div class="segments">
+    <div class="segments" id="sectionSegments">
       <section class="segment" id="hookSegment">
         <h2><span class="dot hook"></span>Hook</h2>
         <select id="hookSelect"></select>
@@ -151,7 +151,7 @@
       </section>
     </div>
 
-    <div class="timeline-card">
+    <div class="timeline-card" id="sectionTimeline">
       <div class="order-row">
         <span class="order-label">Sequence order (drag to reorder):</span>
         <div class="order-chips" id="orderChips"></div>
@@ -173,7 +173,7 @@
       <div class="result-list" id="resultList"></div>
     </div>
 
-    <div class="batch-card">
+    <div class="batch-card" id="sectionBatch">
       <h3>Batch export</h3>
       <div class="batch-desc">
         Pick 1-10 hooks below, plus the Gameplay to pair them with. Uses the current
@@ -198,7 +198,7 @@
       <div class="batch-results" id="batchResults"></div>
     </div>
 
-    <div class="exports-card">
+    <div class="exports-card" id="sectionExports">
       <div class="exports-header">
         <h3>Past exports</h3>
         <button class="secondary danger" id="clearExportsBtn" title="Removes items from this list only -- files stay in the Exports folder">Clear list</button>

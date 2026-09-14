@@ -39,6 +39,7 @@ Open `http://localhost:5175`. Features:
 - "Add CTA button" overlays a picked CTA image onto just the endcard segment, with a live preview (see below)
 - "Clear list" / "remove" on Past Exports only hide entries from the list -- the files stay in `Exports/`
 - "open" next to any result reveals that file in Finder (macOS `open -R`) rather than opening it in the browser -- works because the editor and the browser viewing it run on the same machine
+- Each major section (Export formats, File naming, Hook/Gameplay/Endcard, Timeline & Export, Batch export, Past exports) has a small grip handle (⠿) in the left margin -- grab it and drag the section itself to reorder the page layout. The order is remembered across reloads
 
 ### CTA button
 
