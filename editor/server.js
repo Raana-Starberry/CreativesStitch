@@ -65,6 +65,8 @@ function resolveAspect(key) {
   return ASPECT_RATIOS[key] || ASPECT_RATIOS["9x16"];
 }
 
+const LANGUAGES = ["EN", "ES", "IT", "TR", "DE"];
+
 fs.mkdirSync(EXPORT_DIR, { recursive: true });
 
 // Files "removed" from the list are hidden here, not deleted from disk.
@@ -256,7 +258,13 @@ function runExport(payload, cb) {
   const { w: canvasW, h: canvasH } = resolveAspect(aspectKey);
 
   const slug = (p) => path.basename(p, path.extname(p)).replace(/[^A-Za-z0-9]+/g, "");
-  const outName = `${slug(hookFull)}_${slug(gpFull)}_${target}s_${aspectKey}_${crypto.randomBytes(2).toString("hex")}.mp4`;
+  const gameSlug = String(payload.gameName || "").replace(/[^A-Za-z0-9]+/g, "") || "Game";
+  const language = LANGUAGES.includes(String(payload.language || "").toUpperCase())
+    ? String(payload.language).toUpperCase() : "EN";
+  const today = new Date();
+  const dateStr = `${today.getFullYear()}.${String(today.getMonth() + 1).padStart(2, "0")}.${String(today.getDate()).padStart(2, "0")}`;
+  // {Game}_{Dimension}_{Date}_{Language}_{HookName}_{GPName}_{Duration}
+  const outName = `${gameSlug}_${aspectKey}_${dateStr}_${language}_${slug(hookFull)}_${slug(gpFull)}_${target}s.mp4`;
   const outPath = path.join(EXPORT_DIR, outName);
 
   const af = `aformat=sample_rates=${AUDIO_RATE}:channel_layouts=${AUDIO_LAYOUT}`;

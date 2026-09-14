@@ -437,6 +437,23 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .aspect-chip input { accent-color: var(--accent); }
 .aspect-all { margin-left: auto; color: var(--muted); font-size: 12px; }
 
+.game-name-input {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 13px;
+  width: 180px;
+}
+.naming-preview {
+  font-size: 11px;
+  color: var(--muted);
+  font-family: monospace;
+  margin-left: auto;
+  overflow-wrap: anywhere;
+}
+
 .batch-card {
   margin-top: 20px;
   background: var(--panel);

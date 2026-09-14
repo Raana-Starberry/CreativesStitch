@@ -142,6 +142,7 @@ function loadHook(item) {
   hookSpeed.apply(1);
   syncHookLabels();
   refreshTimeline();
+  updateNamingPreview();
 }
 
 function loadGp(item) {
@@ -157,6 +158,7 @@ function loadGp(item) {
   const idx = state.assets.gameplays.indexOf(item);
   if (el("gpSelect")) el("gpSelect").value = idx;
   if (el("batchGpSelect")) el("batchGpSelect").value = idx;
+  updateNamingPreview();
 }
 
 function loadEnd(item) {
@@ -357,6 +359,36 @@ el("aspectAll").addEventListener("change", (e) => {
   document.querySelectorAll(".aspect-check").forEach((cb) => (cb.checked = e.target.checked));
 });
 
+// --- file naming: {Game}_{Dimension}_{Date}_{Language}_{HookName}_{GPName}_{Duration} ---
+try {
+  const savedGameName = localStorage.getItem("cs_gameName");
+  if (savedGameName) el("gameNameInput").value = savedGameName;
+} catch (e) { /* localStorage unavailable -- fine, just won't persist */ }
+
+function todayDateStr() {
+  const d = new Date();
+  return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`;
+}
+function slugify(s) {
+  return String(s || "").replace(/[^A-Za-z0-9]+/g, "");
+}
+function updateNamingPreview() {
+  const game = slugify(el("gameNameInput").value) || "Game";
+  const lang = el("languageSelect").value;
+  const aspects = getSelectedAspects();
+  const aspect = aspects[0] || "9x16";
+  const hookName = state.hook ? slugify(state.hook.rel.split("/").pop().replace(/\.[^.]+$/, "")) : "Hook";
+  const gpName = state.gp ? slugify(state.gp.rel.split("/").pop().replace(/\.[^.]+$/, "")) : "GP";
+  el("namingPreview").textContent =
+    `Preview: ${game}_${aspect}_${todayDateStr()}_${lang}_${hookName}_${gpName}_${state.target}s.mp4`;
+}
+el("gameNameInput").addEventListener("input", () => {
+  try { localStorage.setItem("cs_gameName", el("gameNameInput").value); } catch (e) {}
+  updateNamingPreview();
+});
+el("languageSelect").addEventListener("change", updateNamingPreview);
+document.querySelectorAll(".aspect-check").forEach((cb) => cb.addEventListener("change", updateNamingPreview));
+
 // --- export ---
 el("exportBtn").addEventListener("click", async () => {
   const btn = el("exportBtn");
@@ -464,6 +496,7 @@ el("targetToggle").addEventListener("click", (e) => {
   el("batchTargetName").textContent = state.target;
   if (state.hook && state.gp && state.end) autoFitGameplay();
   else refreshTimeline();
+  updateNamingPreview();
 });
 
 el("autoFitBtn").addEventListener("click", autoFitGameplay);
@@ -544,6 +577,8 @@ async function exportOne(hookPayload, gpPayload, aspect) {
     endcard: buildEndcardPayload(),
     cta: buildCtaPayload(),
     aspect,
+    gameName: el("gameNameInput").value,
+    language: el("languageSelect").value,
   };
   const res = await fetch("/api/export", {
     method: "POST",
@@ -718,5 +753,6 @@ async function init() {
   renderOrderChips();
   renderBatchHookList();
   loadExportsList();
+  updateNamingPreview();
 }
 init();
