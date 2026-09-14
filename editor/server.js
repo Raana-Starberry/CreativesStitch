@@ -188,6 +188,7 @@ function atempoChain(speed) {
 }
 
 const CTA_VERTICAL_FRAC = 0.6; // where the button's vertical center sits, as a fraction of canvas height from the top
+const CTA_BASE_HEIGHT = 1920; // 9x16's height -- the reference the CTA's "100% / original size" is defined against
 const CTA_SCALE_ANIM_DUR = 0.35; // seconds for the soft scale-in
 const CTA_PULSE_AMPLITUDE = 0.06; // +/- size wobble during the hold, as a fraction
 const CTA_PULSE_PERIOD = 0.9; // seconds per pulse cycle
@@ -282,7 +283,12 @@ function runExport(payload, cb) {
   if (ctaFull) {
     args.push("-loop", "1", "-i", ctaFull);
     const scaleExpr = ctaScaleExpr();
-    filters.push(`[${inputIdx}:v]scale=w='iw*(${scaleExpr})':h='ih*(${scaleExpr})':eval=frame[cta_img]`);
+    // "Original size" is defined relative to the 9x16 canvas; other aspect
+    // ratios scale the button by their height vs 9x16's, so it reads at a
+    // consistent relative size instead of ballooning on shorter canvases
+    // (e.g. 4x5 at 1350 tall -> 1350/1920 = 70% of the 9x16 button size).
+    const ctaBaseScale = (canvasH / CTA_BASE_HEIGHT).toFixed(6);
+    filters.push(`[${inputIdx}:v]scale=w='iw*${ctaBaseScale}*(${scaleExpr})':h='ih*${ctaBaseScale}*(${scaleExpr})':eval=frame[cta_img]`);
     filters.push(`[v_end][cta_img]overlay=(W-w)/2:H*${CTA_VERTICAL_FRAC}-h/2:shortest=1[v_end_cta]`);
     segLabels.end.v = "v_end_cta";
     inputIdx++;
