@@ -180,15 +180,19 @@ function atempoChain(speed) {
 
 const CTA_VERTICAL_FRAC = 0.6; // where the button's vertical center sits, as a fraction of canvas height from the top
 const CTA_SCALE_ANIM_DUR = 0.35; // seconds for the soft scale-in / scale-out
+const CTA_PULSE_AMPLITUDE = 0.06; // +/- size wobble during the hold, as a fraction
+const CTA_PULSE_PERIOD = 0.9; // seconds per pulse cycle
 
-// A soft pop: eased 0->1 over the first CTA_SCALE_ANIM_DUR seconds, held at 1,
-// eased back to 0 over the last CTA_SCALE_ANIM_DUR seconds. `t` here is local
-// to the CTA image's own input stream, which starts at 0 in step with the
-// endcard segment it's overlaid onto (both begin decoding at the same point,
-// pre-concat), so this lines up correctly with that segment's real duration.
+// A soft pop: eased 0->1 over the first CTA_SCALE_ANIM_DUR seconds, a gentle
+// continuous "tap me" pulse while held, then eased back to 0 over the last
+// CTA_SCALE_ANIM_DUR seconds. `t` here is local to the CTA image's own input
+// stream, which starts at 0 in step with the endcard segment it's overlaid
+// onto (both begin decoding at the same point, pre-concat), so this lines up
+// correctly with that segment's real duration.
 function ctaScaleExpr(endDur) {
   const d = endDur.toFixed(3), a = CTA_SCALE_ANIM_DUR;
-  return `max(0.05,if(lt(t,${a}),sin(min(t/${a},1)*PI/2),if(gt(t,${(endDur - CTA_SCALE_ANIM_DUR).toFixed(3)}),sin(max((${d}-t)/${a},0)*PI/2),1)))`;
+  const pulse = `1+${CTA_PULSE_AMPLITUDE}*sin(2*PI*(t-${a})/${CTA_PULSE_PERIOD})`;
+  return `max(0.05,if(lt(t,${a}),sin(min(t/${a},1)*PI/2),if(gt(t,${(endDur - CTA_SCALE_ANIM_DUR).toFixed(3)}),sin(max((${d}-t)/${a},0)*PI/2),${pulse})))`;
 }
 
 function runExport(payload, cb) {
