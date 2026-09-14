@@ -205,6 +205,29 @@ function ctaScaleExpr() {
   return `max(0.05,if(lt(t,${a}),sin(min(t/${a},1)*PI/2),${pulse}))`;
 }
 
+const LANDSCAPE_FG_HEIGHT_FRAC = 0.6; // foreground height as a fraction of the 16x9 canvas
+const LANDSCAPE_BLUR_SIGMA = 20;
+
+// Builds the scale/crop/format filter chain for one video stream. Sources
+// here are usually portrait (9x16-shot), so force-cropping them to fill a
+// 16x9 landscape frame would throw away most of the shot -- instead, 16x9
+// gets a blurred, full-bleed copy of the same video as background, with the
+// uncropped source composited on top at LANDSCAPE_FG_HEIGHT_FRAC of the
+// canvas height. 9x16/4x5 keep the plain crop-to-fill.
+function buildVideoFilter(filters, srcPad, outPad, canvasW, canvasH, aspectKey, ptsFactor) {
+  const ptsPart = ptsFactor ? `,setpts=PTS*${ptsFactor}` : "";
+  if (aspectKey === "16x9") {
+    const fgH = Math.round(canvasH * LANDSCAPE_FG_HEIGHT_FRAC);
+    const tag = crypto.randomBytes(3).toString("hex");
+    filters.push(`[${srcPad}]split=2[bg${tag}][fg${tag}]`);
+    filters.push(`[bg${tag}]scale=${canvasW}:${canvasH}:force_original_aspect_ratio=increase,crop=${canvasW}:${canvasH},gblur=sigma=${LANDSCAPE_BLUR_SIGMA},setsar=1[bgd${tag}]`);
+    filters.push(`[fg${tag}]scale=-2:${fgH}[fgd${tag}]`);
+    filters.push(`[bgd${tag}][fgd${tag}]overlay=(W-w)/2:(H-h)/2,fps=${FPS},format=yuv420p${ptsPart}[${outPad}]`);
+  } else {
+    filters.push(`[${srcPad}]scale=${canvasW}:${canvasH}:force_original_aspect_ratio=increase,crop=${canvasW}:${canvasH},setsar=1,fps=${FPS},format=yuv420p${ptsPart}[${outPad}]`);
+  }
+}
+
 function runExport(payload, cb) {
   const { hook, gameplay, endcard, target, cta } = payload;
   const order = Array.isArray(payload.order) && payload.order.length === 3
@@ -236,7 +259,6 @@ function runExport(payload, cb) {
   const outName = `${slug(hookFull)}_${slug(gpFull)}_${target}s_${aspectKey}_${crypto.randomBytes(2).toString("hex")}.mp4`;
   const outPath = path.join(EXPORT_DIR, outName);
 
-  const vf = `scale=${canvasW}:${canvasH}:force_original_aspect_ratio=increase,crop=${canvasW}:${canvasH},setsar=1,fps=${FPS},format=yuv420p`;
   const af = `aformat=sample_rates=${AUDIO_RATE}:channel_layouts=${AUDIO_LAYOUT}`;
 
   const args = ["-y", "-loglevel", "error"];
@@ -246,7 +268,7 @@ function runExport(payload, cb) {
 
   // hook
   args.push("-ss", hookIn.toFixed(3), "-t", (hookOut - hookIn).toFixed(3), "-i", hookFull);
-  filters.push(`[${inputIdx}:v]${vf},setpts=PTS*${(1 / hookSpeed).toFixed(6)}[v_hook]`);
+  buildVideoFilter(filters, `${inputIdx}:v`, "v_hook", canvasW, canvasH, aspectKey, (1 / hookSpeed).toFixed(6));
   filters.push(`[${inputIdx}:a]${af},${atempoChain(hookSpeed)}[a_hook]`);
   segLabels.hook = { v: "v_hook", a: "a_hook" };
   inputIdx++;
@@ -254,7 +276,7 @@ function runExport(payload, cb) {
   // gameplay (loop the source if the requested range runs past its end)
   if (gpNeedsLoop) args.push("-stream_loop", "-1");
   args.push("-ss", gpIn.toFixed(3), "-t", (gpOut - gpIn).toFixed(3), "-i", gpFull);
-  filters.push(`[${inputIdx}:v]${vf},setpts=PTS*${(1 / gpSpeed).toFixed(6)}[v_gp]`);
+  buildVideoFilter(filters, `${inputIdx}:v`, "v_gp", canvasW, canvasH, aspectKey, (1 / gpSpeed).toFixed(6));
   filters.push(`[${inputIdx}:a]${af},${atempoChain(gpSpeed)}[a_gp]`);
   segLabels.gp = { v: "v_gp", a: "a_gp" };
   inputIdx++;
@@ -262,14 +284,14 @@ function runExport(payload, cb) {
   // endcard
   if (isImage) {
     args.push("-loop", "1", "-t", endDur.toFixed(3), "-i", endFull);
-    filters.push(`[${inputIdx}:v]${vf}[v_end]`);
+    buildVideoFilter(filters, `${inputIdx}:v`, "v_end", canvasW, canvasH, aspectKey, null);
     inputIdx++;
     args.push("-f", "lavfi", "-t", endDur.toFixed(3), "-i", `anullsrc=r=${AUDIO_RATE}:cl=${AUDIO_LAYOUT}`);
     filters.push(`[${inputIdx}:a]anull[a_end]`);
     inputIdx++;
   } else {
     args.push("-ss", (endcard.in || 0).toFixed(3), "-t", (endDur * endSpeed).toFixed(3), "-i", endFull);
-    filters.push(`[${inputIdx}:v]${vf},setpts=PTS*${(1 / endSpeed).toFixed(6)}[v_end]`);
+    buildVideoFilter(filters, `${inputIdx}:v`, "v_end", canvasW, canvasH, aspectKey, (1 / endSpeed).toFixed(6));
     filters.push(`[${inputIdx}:a]${af},${atempoChain(endSpeed)}[a_end]`);
     inputIdx++;
   }
