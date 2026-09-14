@@ -319,12 +319,12 @@ function runSequence() {
   step();
 }
 
-// --- captioning (ElevenLabs speech-to-text -> soft subtitle track) ---
-async function captionExport(filename) {
+// --- captioning (ElevenLabs speech-to-text -> burned-in or soft subtitle track) ---
+async function captionExport(filename, style) {
   const res = await fetch("/api/caption", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ file: filename }),
+    body: JSON.stringify({ file: filename, style }),
   });
   const data = await res.json();
   if (!res.ok || data.error) throw new Error(data.error || "captioning failed");
@@ -366,7 +366,7 @@ el("exportBtn").addEventListener("click", async () => {
     if (el("captionToggle").checked) {
       status.textContent = `Done: ${data.file} -- captioning...`;
       try {
-        const capData = await captionExport(data.file);
+        const capData = await captionExport(data.file, el("captionStyle").value);
         if (capData.captioned) {
           status.textContent = `Done: ${capData.file} (captioned)`;
           el("resultVideo").src = capData.url;
@@ -592,7 +592,7 @@ el("batchExportBtn").addEventListener("click", async () => {
       if (el("batchCaptionToggle").checked) {
         row.innerHTML = `<span class="name">${h.name}</span><span class="state">Captioning...</span>`;
         try {
-          const capData = await captionExport(data.file);
+          const capData = await captionExport(data.file, el("batchCaptionStyle").value);
           if (capData.captioned) { finalUrl = capData.url; finalState = "Done (captioned)"; }
           else finalState = `Done (${capData.reason || "no captions"})`;
         } catch (e) {

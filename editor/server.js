@@ -33,6 +33,23 @@ const PORT = process.env.PORT || 5175;
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY || "";
 const ELEVENLABS_STT_MODEL = process.env.ELEVENLABS_STT_MODEL || "scribe_v1";
 
+// Burned-in captions need libass (the `subtitles` filter), which the default
+// Homebrew `ffmpeg` formula ships without. `ffmpeg-full` (also in
+// homebrew-core) has it, is keg-only, and doesn't touch the default `ffmpeg`
+// on PATH -- so only this one operation uses it, everything else keeps using
+// plain `ffmpeg`.
+function resolveSubtitlesFfmpeg() {
+  if (process.env.FFMPEG_FULL_BIN) return process.env.FFMPEG_FULL_BIN;
+  const candidates = [
+    "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg",
+    "/usr/local/opt/ffmpeg-full/bin/ffmpeg",
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
+  return "ffmpeg"; // fallback -- burn-in will fail if this build lacks libass
+}
+
 const VIDEO_EXT = new Set([".mp4", ".mov", ".m4v"]);
 const IMAGE_EXT = new Set([".png", ".jpg", ".jpeg"]);
 
@@ -305,7 +322,7 @@ function srtTime(sec) {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")},${String(msRem).padStart(3, "0")}`;
 }
 
-function wordsToSrt(words) {
+function groupWordsIntoCues(words) {
   const MAX_WORDS = 5, MAX_CUE_SEC = 2.5;
   const cues = [];
   let cur = [];
@@ -317,11 +334,51 @@ function wordsToSrt(words) {
     cur.push(w);
   }
   if (cur.length) cues.push(cur);
+  return cues;
+}
 
+function wordsToSrt(words) {
+  const cues = groupWordsIntoCues(words);
   return cues.map((cue, i) => {
     const text = cue.map((w) => w.text).join(" ").trim();
     return `${i + 1}\n${srtTime(cue[0].start)} --> ${srtTime(cue[cue.length - 1].end)}\n${text}\n`;
   }).join("\n");
+}
+
+function assTime(sec) {
+  const cs = Math.round(sec * 100);
+  const h = Math.floor(cs / 360000);
+  const m = Math.floor((cs % 360000) / 6000);
+  const s = Math.floor((cs % 6000) / 100);
+  const csRem = cs % 100;
+  return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}.${String(csRem).padStart(2, "0")}`;
+}
+
+// A plain SRT has no notion of the video's resolution, so libass assumes a
+// small default canvas and scales font/margin sizes up wildly to match our
+// actual 1080x1920 output. Writing a real .ass file with an explicit
+// PlayResY (matching CANVAS_H) and the style baked in sidesteps that guess
+// entirely -- this is what burned-in captions render from.
+function wordsToAss(words) {
+  const cues = groupWordsIntoCues(words);
+  const header = `[Script Info]
+ScriptType: v4.00+
+PlayResX: ${CANVAS_W}
+PlayResY: ${CANVAS_H}
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Arial,52,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,1,0,0,0,100,100,0,0,1,3,1,2,40,40,220,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+`;
+  const events = cues.map((cue) => {
+    const text = cue.map((w) => w.text).join(" ").trim().replace(/[{}]/g, "");
+    return `Dialogue: 0,${assTime(cue[0].start)},${assTime(cue[cue.length - 1].end)},Default,,0,0,0,,${text}`;
+  }).join("\n");
+  return header + events + "\n";
 }
 
 function muxSoftSubtitles(videoPath, srtPath, outPath, cb) {
@@ -334,6 +391,35 @@ function muxSoftSubtitles(videoPath, srtPath, outPath, cb) {
     outPath,
   ];
   const proc = spawn("ffmpeg", args);
+  let stderr = "";
+  proc.stderr.on("data", (d) => (stderr += d.toString()));
+  proc.on("close", (code) => {
+    if (code === 0) cb(null);
+    else cb(new Error(stderr || `ffmpeg exited ${code}`));
+  });
+}
+
+// Escape a filesystem path for use as the subtitles filter's file argument.
+// Our own paths never contain ':' or '\\' (macOS, filenames we generate), so
+// this only needs to guard against a stray single quote.
+function escapeSubtitlesPath(p) {
+  return p.replace(/'/g, "'\\''");
+}
+
+function burnInSubtitles(videoPath, assPath, outPath, cb) {
+  // The .ass file (from wordsToAss) already carries an explicit PlayResY and
+  // full style block, so no force_style guesswork is needed here.
+  const vf = `subtitles='${escapeSubtitlesPath(assPath)}'`;
+
+  const args = [
+    "-y", "-loglevel", "error",
+    "-i", videoPath,
+    "-vf", vf,
+    "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-pix_fmt", "yuv420p",
+    "-c:a", "copy",
+    outPath,
+  ];
+  const proc = spawn(resolveSubtitlesFfmpeg(), args);
   let stderr = "";
   proc.stderr.on("data", (d) => (stderr += d.toString()));
   proc.on("close", (code) => {
@@ -386,18 +472,20 @@ const server = http.createServer((req, res) => {
       if (!srcPath || !srcPath.startsWith(EXPORT_DIR + path.sep) || !fs.existsSync(srcPath)) {
         return sendJSON(res, 404, { error: "export not found" });
       }
+      const style = payload.style === "burned" ? "burned" : "soft";
       try {
         const words = await transcribeWithElevenLabs(srcPath);
         if (!words.length) return sendJSON(res, 200, { ok: true, captioned: false, reason: "no speech detected" });
 
-        const srt = wordsToSrt(words);
-        const srtPath = srcPath.replace(/\.mp4$/i, ".srt");
-        fs.writeFileSync(srtPath, srt);
+        const subsPath = srcPath.replace(/\.mp4$/i, style === "burned" ? ".ass" : ".srt");
+        fs.writeFileSync(subsPath, style === "burned" ? wordsToAss(words) : wordsToSrt(words));
 
-        const outName = srcName.replace(/\.mp4$/i, "_captioned.mp4");
+        const suffix = style === "burned" ? "_captioned_burned.mp4" : "_captioned.mp4";
+        const outName = srcName.replace(/\.mp4$/i, suffix);
         const outPath = path.join(EXPORT_DIR, outName);
-        muxSoftSubtitles(srcPath, srtPath, outPath, (err) => {
-          fs.unlinkSync(srtPath);
+        const mux = style === "burned" ? burnInSubtitles : muxSoftSubtitles;
+        mux(srcPath, subsPath, outPath, (err) => {
+          fs.unlinkSync(subsPath);
           if (err) return sendJSON(res, 500, { error: err.message });
           sendJSON(res, 200, { ok: true, captioned: true, file: outName, url: `/exports/${outName}` });
         });

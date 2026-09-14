@@ -336,6 +336,15 @@ select {
   user-select: none;
 }
 .caption-toggle input { accent-color: var(--accent); }
+
+.caption-style {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 6px;
+  font-size: 12px;
+}
 button.primary, button.secondary {
   border: none;
   border-radius: 8px;

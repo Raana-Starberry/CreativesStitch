@@ -130,6 +130,10 @@
         <div class="total-readout" id="totalReadout">Total: <b>0.0s</b> / target 30s</div>
         <div class="actions">
           <label class="caption-toggle"><input type="checkbox" id="captionToggle" /> Caption this</label>
+          <select id="captionStyle" class="caption-style">
+            <option value="burned" selected>Burned-in</option>
+            <option value="soft">Soft subtitle</option>
+          </select>
           <button class="secondary" id="previewAllBtn">▶ Preview full sequence</button>
           <button class="primary" id="exportBtn">Export</button>
         </div>
@@ -160,6 +164,10 @@
         <button class="secondary" id="batchSelectAllBtn">Select all</button>
         <button class="secondary" id="batchSelectNoneBtn">Select none</button>
         <label class="caption-toggle"><input type="checkbox" id="batchCaptionToggle" /> Caption these</label>
+        <select id="batchCaptionStyle" class="caption-style">
+          <option value="burned" selected>Burned-in</option>
+          <option value="soft">Soft subtitle</option>
+        </select>
         <button class="primary" id="batchExportBtn">Batch export selected</button>
       </div>
       <div class="batch-results" id="batchResults"></div>
