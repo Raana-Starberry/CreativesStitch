@@ -335,15 +335,25 @@ async function captionExport(filename, style) {
 }
 
 async function maybeApplyCaption(file, url, toggleEl, styleEl, onStatus) {
-  if (!toggleEl.checked) return { url, label: "Done" };
+  if (!toggleEl.checked) return { url, file, label: "Done" };
   if (onStatus) onStatus("Captioning...");
   try {
     const capData = await captionExport(file, styleEl.value);
-    if (capData.captioned) return { url: capData.url, label: "Done (captioned)" };
-    return { url, label: `Done (${capData.reason || "no captions"})` };
+    if (capData.captioned) return { url: capData.url, file: capData.file, label: "Done (captioned)" };
+    return { url, file, label: `Done (${capData.reason || "no captions"})` };
   } catch (e) {
-    return { url, label: `Done, captioning failed: ${e.message}` };
+    return { url, file, label: `Done, captioning failed: ${e.message}` };
   }
+}
+
+async function revealFile(name) {
+  try {
+    await fetch("/api/reveal", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ file: name }),
+    });
+  } catch (e) { /* best-effort -- nothing sensible to show the user if this fails */ }
 }
 
 // --- aspect ratio selection ---
@@ -428,7 +438,8 @@ el("exportBtn").addEventListener("click", async () => {
         row.innerHTML = `<span class="tag">${a}</span><span class="state">${s}</span>`;
       });
       row.className = "row state-done";
-      row.innerHTML = `<span class="tag">${a}</span><span class="state">${result.label}</span><a href="${result.url}" target="_blank">open</a>`;
+      row.innerHTML = `<span class="tag">${a}</span><span class="state">${result.label}</span><button class="row-open">open</button>`;
+      row.querySelector(".row-open").addEventListener("click", () => revealFile(result.file));
     } catch (e) {
       row.className = "row state-error";
       row.innerHTML = `<span class="tag">${a}</span><span class="state">Error: ${e.message}</span>`;
@@ -451,8 +462,11 @@ async function loadExportsList() {
     row.className = "row";
     const sizeMb = (f.size / 1e6).toFixed(1);
     row.innerHTML = `<span>${f.name} <span style="color:var(--muted)">(${sizeMb} MB)</span></span>
-      <span class="links"><a href="${f.url}" target="_blank">open</a><a class="row-delete" data-name="${f.name}" title="Removes from this list only -- the file stays in Exports/">remove</a></span>`;
+      <span class="links"><button class="row-open" data-name="${f.name}" title="Reveals the file in Finder">open</button><button class="row-delete" data-name="${f.name}" title="Removes from this list only -- the file stays in Exports/">remove</button></span>`;
     list.appendChild(row);
+  });
+  list.querySelectorAll(".row-open").forEach((link) => {
+    link.addEventListener("click", () => revealFile(link.dataset.name));
   });
   list.querySelectorAll(".row-delete").forEach((link) => {
     link.addEventListener("click", async () => {
@@ -676,7 +690,8 @@ el("batchExportBtn").addEventListener("click", async () => {
           row.innerHTML = `<span class="name">${h.name}<span class="tag">${a}</span></span><span class="state">${s}</span>`;
         });
         row.className = "batch-row state-done";
-        row.innerHTML = `<span class="name">${h.name}<span class="tag">${a}</span></span><span class="state">${result.label}</span><a href="${result.url}" target="_blank">open</a>`;
+        row.innerHTML = `<span class="name">${h.name}<span class="tag">${a}</span></span><span class="state">${result.label}</span><button class="row-open">open</button>`;
+        row.querySelector(".row-open").addEventListener("click", () => revealFile(result.file));
       } catch (e) {
         row.className = "batch-row state-error";
         row.innerHTML = `<span class="name">${h.name}<span class="tag">${a}</span></span><span class="state">Error: ${e.message}</span>`;

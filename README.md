@@ -37,6 +37,7 @@ Open `http://localhost:5175`. Features:
 - Optional "Caption this" / "Caption these" checkboxes add auto-generated captions as a soft subtitle track (see below)
 - "Add CTA button" overlays a picked CTA image onto just the endcard segment, with a live preview (see below)
 - "Clear list" / "remove" on Past Exports only hide entries from the list -- the files stay in `Exports/`
+- "open" next to any result reveals that file in Finder (macOS `open -R`) rather than opening it in the browser -- works because the editor and the browser viewing it run on the same machine
 
 ### CTA button
 

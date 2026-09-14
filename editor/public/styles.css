@@ -412,7 +412,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .result-list .row .state { flex: 1; color: var(--muted); }
 .result-list .row.state-done .state { color: var(--ok); }
 .result-list .row.state-error .state { color: var(--danger); }
-.result-list a { color: var(--accent); text-decoration: none; flex-shrink: 0; }
+.result-list .row-open { flex-shrink: 0; }
 
 .aspect-bar {
   display: flex;
@@ -532,7 +532,6 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .batch-row.state-rendering .state { color: var(--accent); }
 .batch-row.state-done .state { color: var(--ok); }
 .batch-row.state-error .state { color: var(--danger); }
-.batch-row a { color: var(--accent); text-decoration: none; }
 
 .exports-card {
   margin-top: 20px;
@@ -549,5 +548,13 @@ button.danger:hover { background: var(--danger); color: white; }
 .exports-list .row { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 13px; padding: 6px 8px; border-radius: 6px; }
 .exports-list .row:hover { background: var(--panel-2); }
 .exports-list .row .links { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
-.exports-list a { color: var(--accent); text-decoration: none; }
-.exports-list .row-delete { color: var(--danger); text-decoration: none; cursor: pointer; }
+.row-open, .row-delete {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+.row-open { color: var(--accent); }
+.row-delete { color: var(--danger); }

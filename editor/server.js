@@ -603,6 +603,32 @@ const server = http.createServer((req, res) => {
     return streamFile(req, res, full);
   }
 
+  // Reveals a file (or just the Exports folder) in the OS file manager --
+  // this only makes sense because the editor and the browser viewing it are
+  // running on the same machine. macOS-only (`open -R`); on another OS this
+  // would need a different reveal command.
+  if (url.pathname === "/api/reveal" && req.method === "POST") {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      let payload;
+      try { payload = JSON.parse(body || "{}"); } catch (e) { return sendJSON(res, 400, { error: "bad json" }); }
+      const name = payload.file;
+      const full = name ? path.join(EXPORT_DIR, name) : EXPORT_DIR;
+      const inBounds = full === EXPORT_DIR || full.startsWith(EXPORT_DIR + path.sep);
+      if (!inBounds || !fs.existsSync(full)) return sendJSON(res, 404, { error: "not found" });
+      const args = name ? ["-R", full] : [full];
+      const proc = spawn("open", args);
+      let stderr = "";
+      proc.stderr.on("data", (d) => (stderr += d.toString()));
+      proc.on("close", (code) => {
+        if (code === 0) sendJSON(res, 200, { ok: true });
+        else sendJSON(res, 500, { error: stderr || `open exited ${code}` });
+      });
+    });
+    return;
+  }
+
   // "Delete" only hides an export from the list -- the file stays in Exports/ on disk.
   if (url.pathname === "/api/exports" && req.method === "DELETE") {
     const hidden = new Set(loadHidden());
