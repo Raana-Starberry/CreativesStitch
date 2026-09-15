@@ -76,18 +76,17 @@ Checking "Add music" (single export) or "Add music" in Batch export generates an
 
 ### Generating a Hook with Higgsfield
 
-The Hook segment has a toggle at the top: **Existing** (pick from the `Hook/` folder as usual) or **Generate with Higgsfield**. In generate mode, describe the clip in the text box, pick a duration (5s or 10s), and hit "Generate hook" -- it submits a text-to-video request to [Higgsfield](https://docs.higgsfield.ai/docs) (Kling 2.5 Turbo Pro), polls until it's done (typically under a couple of minutes), downloads the result straight into the `Hook/` folder, and selects it as the current hook. From that point on it's just a normal hook clip -- reusable from the "Existing" dropdown on future runs, trimmable, speed-adjustable, same as anything else.
+The Hook segment has a toggle at the top: **Existing** (pick from the `Hook/` folder as usual) or **Generate with Higgsfield**. In generate mode, describe the clip in the text box, optionally attach a **reference image** (uploaded locally, used as the video's start frame instead of pure text-to-video), pick a duration (5s or 10s), and hit "Generate hook" -- it runs the [Higgsfield CLI](https://higgsfield.ai/cli) (Kling 3.0 Turbo, 9:16) in the background, waits for the result (typically under a couple of minutes), downloads it straight into the `Hook/` folder, and selects it as the current hook. From that point on it's just a normal hook clip -- reusable from the "Existing" dropdown on future runs, trimmable, speed-adjustable, same as anything else.
 
-Setup: add to `.env` (separate credentials from any Higgsfield MCP/Claude Code connection):
+Setup: install and authenticate the Higgsfield CLI once (it draws on your Higgsfield account's own subscription credits, not a separate API wallet):
 
+```bash
+npm i -g @higgsfield/cli
+higgsfield auth login
+higgsfield workspace set <workspace_id>   # `higgsfield workspace list` shows the id
 ```
-HIGGSFIELD_API_KEY_ID=your_key_id
-HIGGSFIELD_API_KEY_SECRET=your_key_secret
-```
 
-Get these from [Higgsfield Cloud](https://cloud.higgsfield.ai). Generation requires account credits -- an auth failure shows as an invalid-credentials error, while an out-of-credits account shows a `402`/`403` error in the status line instead of a video.
-
-Kling 2.5 Turbo Pro generates natively in 16:9; the result is cropped like any other Hook source when exporting to 9:16/4:5. Only text-to-video is wired up for now (no image generation, no image-to-video).
+The editor server shells out to this CLI, so it must stay authenticated on the machine running `node editor/server.js`. Running low on credits (`higgsfield account status`) shows up as a generation error in the status line rather than a video.
 
 ## Batch script
 

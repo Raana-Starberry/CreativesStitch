@@ -50,6 +50,12 @@
         </div>
         <div class="hook-generate" id="hookGenerate" style="display:none">
           <textarea id="hookGenPrompt" class="hook-gen-prompt" rows="3" placeholder="Describe the video, e.g. &quot;A woman excitedly showing off a garden puzzle game on her phone, bright daylight&quot;"></textarea>
+          <div class="hook-gen-image-row">
+            <label class="hook-gen-image-btn" for="hookGenImage">Reference image (optional)</label>
+            <input type="file" id="hookGenImage" accept="image/*" style="display:none" />
+            <img id="hookGenImagePreview" class="hook-gen-image-preview" style="display:none" />
+            <button class="secondary" id="hookGenImageClear" style="display:none" title="Remove reference image">✕</button>
+          </div>
           <div class="hook-gen-row">
             <label>Duration
               <select id="hookGenDuration">

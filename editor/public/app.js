@@ -912,6 +912,38 @@ document.querySelectorAll("#hookSourceToggle button").forEach((btn) => {
   });
 });
 
+// Optional reference image -- read as a data URI client-side. Higgsfield's
+// image_url field accepts an inline "data:image/...;base64,..." string
+// directly, so nothing needs to be uploaded/hosted anywhere first.
+let hookGenImageDataUri = null;
+
+function clearHookGenImage() {
+  hookGenImageDataUri = null;
+  el("hookGenImage").value = "";
+  el("hookGenImagePreview").style.display = "none";
+  el("hookGenImagePreview").src = "";
+  el("hookGenImageClear").style.display = "none";
+}
+
+el("hookGenImage").addEventListener("change", () => {
+  const file = el("hookGenImage").files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    hookGenImageDataUri = reader.result;
+    el("hookGenImagePreview").src = hookGenImageDataUri;
+    el("hookGenImagePreview").style.display = "block";
+    el("hookGenImageClear").style.display = "inline-block";
+  };
+  reader.onerror = () => {
+    el("hookGenStatus").className = "status-line error";
+    el("hookGenStatus").textContent = "Could not read that image file.";
+    clearHookGenImage();
+  };
+  reader.readAsDataURL(file);
+});
+el("hookGenImageClear").addEventListener("click", clearHookGenImage);
+
 el("hookGenBtn").addEventListener("click", async () => {
   const btn = el("hookGenBtn");
   const status = el("hookGenStatus");
@@ -931,7 +963,7 @@ el("hookGenBtn").addEventListener("click", async () => {
     const res = await fetch("/api/higgsfield/generate-hook", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt, duration }),
+      body: JSON.stringify({ prompt, duration, imageDataUri: hookGenImageDataUri }),
     });
     const data = await res.json();
     if (!res.ok || data.error) throw new Error(data.error || "generation failed");
@@ -948,6 +980,7 @@ el("hookGenBtn").addEventListener("click", async () => {
     status.className = "status-line ok";
     status.textContent = `Done: added "${data.name}" as a new hook.`;
     el("hookGenPrompt").value = "";
+    clearHookGenImage();
 
     document.querySelectorAll("#hookSourceToggle button").forEach((b) => b.classList.remove("active"));
     document.querySelector('#hookSourceToggle button[data-source="existing"]').classList.add("active");

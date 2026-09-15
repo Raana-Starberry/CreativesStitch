@@ -632,70 +632,75 @@ function cleanupStaleMusicTracks() {
   }
 }
 
-// --- Higgsfield (Kling 2.5 Turbo Pro) text-to-video -> new Hook clip ---
+// --- Higgsfield (Kling 3.0 Turbo, via the `higgsfield` CLI) -> new Hook clip ---
 // A generated clip is written straight into the Hook folder and treated as a
 // normal asset from then on (discoverAssets() picks it up next refresh), so
 // "generate a hook" and "pick an existing hook" end up being the same thing.
+//
+// This shells out to the `higgsfield` CLI (authenticated via `higgsfield auth
+// login`, workspace selected via `higgsfield workspace set`) rather than
+// calling api.higgsfield.ai directly with an API key -- the CLI draws on the
+// account's own subscription credits, while the plain REST API key draws
+// from a separate developer wallet that needs its own top-up.
 
-const HIGGSFIELD_API_BASE = "https://api.higgsfield.ai";
-const HIGGSFIELD_TEXT_TO_VIDEO_PATH = "/kling-video/v2.5-turbo/pro/text-to-video";
+const HIGGSFIELD_MODEL = "kling3_0_turbo";
 
-function higgsfieldAuthHeader() {
-  const id = process.env.HIGGSFIELD_API_KEY_ID;
-  const secret = process.env.HIGGSFIELD_API_KEY_SECRET;
-  if (!id || !secret) throw new Error("HIGGSFIELD_API_KEY_ID / HIGGSFIELD_API_KEY_SECRET not set -- add them to .env in the project root");
-  return `Key ${id}:${secret}`;
+function resolveHiggsfieldBin() {
+  if (process.env.HIGGSFIELD_BIN) return process.env.HIGGSFIELD_BIN;
+  const which = spawnSync("which", ["higgsfield"]);
+  if (which.status === 0) {
+    const p = which.stdout.toString().trim();
+    if (p) return p;
+  }
+  return "higgsfield"; // fallback -- relies on PATH
 }
 
-function higgsfieldRequestJSON(method, urlStr, body) {
-  return new Promise((resolve, reject) => {
-    const u = new URL(urlStr);
-    const payload = body ? Buffer.from(JSON.stringify(body)) : null;
-    const headers = { Authorization: higgsfieldAuthHeader() };
-    if (payload) {
-      headers["Content-Type"] = "application/json";
-      headers["Content-Length"] = payload.length;
+// imageDataUri, when given, is used as the start frame (image-to-video). The
+// CLI's --start-image flag takes a local file path (it uploads it for us),
+// so the data URI is decoded back to a temp file first.
+async function generateHiggsfieldHookVideo(prompt, durationSec, imageDataUri) {
+  const duration = Number(durationSec) === 10 ? 10 : 5;
+  let tempImagePath = null;
+
+  try {
+    const args = [
+      "generate", "create", HIGGSFIELD_MODEL,
+      "--prompt", prompt,
+      "--duration", String(duration),
+      "--aspect-ratio", "9:16",
+      "--wait", "--wait-timeout", "5m",
+      "--json",
+    ];
+
+    if (imageDataUri) {
+      const m = /^data:image\/([a-zA-Z0-9.+-]+);base64,(.+)$/.exec(imageDataUri);
+      if (!m) throw new Error("imageDataUri must be a base64 data URI");
+      const ext = m[1].split("+")[0].replace("jpeg", "jpg");
+      tempImagePath = path.join(os.tmpdir(), `cs-hookgen-${crypto.randomBytes(6).toString("hex")}.${ext}`);
+      fs.writeFileSync(tempImagePath, Buffer.from(m[2], "base64"));
+      args.push("--start-image", tempImagePath);
     }
-    const req = https.request({ hostname: u.hostname, path: u.pathname + u.search, method, headers }, (res) => {
-      const chunks = [];
-      res.on("data", (c) => chunks.push(c));
-      res.on("end", () => {
-        const text = Buffer.concat(chunks).toString("utf8");
-        let json = null;
-        try { json = JSON.parse(text); } catch (e) { /* non-JSON error body */ }
-        if (res.statusCode >= 200 && res.statusCode < 300) resolve(json || {});
-        else reject(new Error((json && (json.detail || json.error)) || `Higgsfield ${res.statusCode}: ${text.slice(0, 300)}`));
+
+    const result = await new Promise((resolve, reject) => {
+      const proc = spawn(resolveHiggsfieldBin(), args);
+      let stdout = "", stderr = "";
+      proc.stdout.on("data", (d) => (stdout += d.toString()));
+      proc.stderr.on("data", (d) => (stderr += d.toString()));
+      proc.on("error", reject);
+      proc.on("close", (code) => {
+        if (code === 0) resolve(stdout.trim());
+        else reject(new Error(stderr.trim() || stdout.trim() || `higgsfield CLI exited ${code}`));
       });
     });
-    req.on("error", reject);
-    if (payload) req.write(payload);
-    req.end();
-  });
-}
 
-async function pollHiggsfieldUntilDone(statusUrl, timeoutMs = 5 * 60 * 1000) {
-  const start = Date.now();
-  let delay = 2000;
-  while (Date.now() - start < timeoutMs) {
-    const body = await higgsfieldRequestJSON("GET", statusUrl);
-    if (["completed", "failed", "nsfw", "canceled"].includes(body.status)) return body;
-    await new Promise((r) => setTimeout(r, delay + Math.random() * 500));
-    delay = Math.min(delay * 1.5, 10000);
+    let job;
+    try { job = JSON.parse(result); } catch (e) { job = null; }
+    const resultUrl = job ? (Array.isArray(job) ? job[0]?.result_url : job.result_url) : result;
+    if (!resultUrl) throw new Error(`higgsfield CLI returned no result URL: ${result.slice(0, 300)}`);
+    return resultUrl;
+  } finally {
+    if (tempImagePath) { try { fs.unlinkSync(tempImagePath); } catch (e) { /* already gone */ } }
   }
-  throw new Error("Higgsfield generation timed out while polling for a result");
-}
-
-async function generateHiggsfieldHookVideo(prompt, durationSec) {
-  const duration = Number(durationSec) === 10 ? 10 : 5; // Kling 2.5 Turbo Pro only accepts 5 or 10
-  const submitBody = await higgsfieldRequestJSON("POST", HIGGSFIELD_API_BASE + HIGGSFIELD_TEXT_TO_VIDEO_PATH, {
-    prompt, duration, negative_prompt: "",
-  });
-  if (!submitBody.status_url) throw new Error("Higgsfield did not return a status_url");
-  const finalStatus = await pollHiggsfieldUntilDone(submitBody.status_url);
-  if (finalStatus.status !== "completed" || !finalStatus.video || !finalStatus.video.url) {
-    throw new Error(finalStatus.error || `Higgsfield generation ended with status "${finalStatus.status}"`);
-  }
-  return finalStatus.video.url;
 }
 
 function downloadToFile(urlStr, destPath, redirectsLeft = 5) {
@@ -885,9 +890,13 @@ const server = http.createServer((req, res) => {
       const prompt = (payload.prompt || "").trim();
       if (!prompt) return sendJSON(res, 400, { error: "prompt required" });
       const duration = Number(payload.duration) === 10 ? 10 : 5;
+      const imageDataUri = typeof payload.imageDataUri === "string" ? payload.imageDataUri : null;
+      if (imageDataUri && !/^data:image\/[a-zA-Z0-9.+-]+;base64,/.test(imageDataUri)) {
+        return sendJSON(res, 400, { error: "imageDataUri must be a base64 data URI" });
+      }
 
       try {
-        const videoUrl = await generateHiggsfieldHookVideo(prompt, duration);
+        const videoUrl = await generateHiggsfieldHookVideo(prompt, duration, imageDataUri);
         const hookDir = resolveHookDir();
         fs.mkdirSync(hookDir, { recursive: true });
         const fileName = `Generated_${slugifyPrompt(prompt)}_${crypto.randomBytes(3).toString("hex")}.mp4`;
