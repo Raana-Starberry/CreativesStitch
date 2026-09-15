@@ -65,6 +65,7 @@ const IMAGE_EXT = new Set([".png", ".jpg", ".jpeg"]);
 
 const FPS = 30;
 const AUDIO_RATE = 48000, AUDIO_LAYOUT = "stereo";
+const TRANSITION_DUR = 0.4; // seconds -- crossfade between consecutive segments (hook/gameplay/endcard), whatever order they're in
 
 const ASPECT_RATIOS = {
   "9x16": { w: 1080, h: 1920 },
@@ -374,8 +375,36 @@ function runExport(payload, cb) {
     inputIdx++;
   }
 
-  const concatInputs = order.map((key) => `[${segLabels[key].v}][${segLabels[key].a}]`).join("");
-  filters.push(`${concatInputs}concat=n=3:v=1:a=1[outv][outa]`);
+  // Crossfade consecutive segments (in whatever sequence order is chosen)
+  // instead of a hard cut. xfade needs an explicit offset (in seconds, into
+  // the running/combined stream so far) where the next clip starts overlapping;
+  // acrossfade infers its own position from the tail of the first input, no
+  // offset needed. Every segment's video was already normalized to the same
+  // canvas/fps/format by buildVideoFilter, and every audio stream to the same
+  // sample rate/layout by addSegmentAudio, so xfade/acrossfade can pair them
+  // directly.
+  const segOutDur = {
+    hook: (hookOut - hookIn) / hookSpeed,
+    gp: (gpOut - gpIn) / gpSpeed,
+    end: endDur,
+  };
+  let curV = segLabels[order[0]].v;
+  let curA = segLabels[order[0]].a;
+  let curDur = segOutDur[order[0]];
+  for (let i = 1; i < order.length; i++) {
+    const key = order[i];
+    const nextDur = segOutDur[key];
+    const fadeDur = Math.max(0.05, Math.min(TRANSITION_DUR, curDur / 2, nextDur / 2));
+    const offset = Math.max(0, curDur - fadeDur);
+    const isLast = i === order.length - 1;
+    const outV = isLast ? "outv" : `xv${i}`;
+    const outA = isLast ? "outa" : `xa${i}`;
+    filters.push(`[${curV}][${segLabels[key].v}]xfade=transition=fade:duration=${fadeDur.toFixed(3)}:offset=${offset.toFixed(3)}[${outV}]`);
+    filters.push(`[${curA}][${segLabels[key].a}]acrossfade=d=${fadeDur.toFixed(3)}:c1=tri:c2=tri[${outA}]`);
+    curV = outV;
+    curA = outA;
+    curDur = curDur + nextDur - fadeDur;
+  }
 
   args.push("-filter_complex", filters.join(";"));
   args.push("-map", "[outv]", "-map", "[outa]");
