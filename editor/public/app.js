@@ -439,13 +439,20 @@ function todayDateStr() {
 function slugify(s) {
   return String(s || "").replace(/[^A-Za-z0-9]+/g, "");
 }
+// Splits into words on any non-alphanumeric run first, then keeps only the
+// first `maxWords` -- keeps the naming convention's Hook/GP name segments
+// short even when the source filename is long (e.g. a Higgsfield-generated
+// hook's prompt-derived name).
+function slugifyWords(s, maxWords) {
+  return String(s || "").split(/[^A-Za-z0-9]+/).filter(Boolean).slice(0, maxWords).join("");
+}
 function updateNamingPreview() {
   const game = slugify(el("gameNameInput").value) || "Game";
   const lang = el("languageSelect").value;
   const aspects = getSelectedAspects();
   const aspect = aspects[0] || "9x16";
-  const hookName = state.hook ? slugify(state.hook.rel.split("/").pop().replace(/\.[^.]+$/, "")) : "Hook";
-  const gpName = state.gp ? slugify(state.gp.rel.split("/").pop().replace(/\.[^.]+$/, "")) : "GP";
+  const hookName = state.hook ? slugifyWords(state.hook.rel.split("/").pop().replace(/\.[^.]+$/, ""), 3) : "Hook";
+  const gpName = state.gp ? slugifyWords(state.gp.rel.split("/").pop().replace(/\.[^.]+$/, ""), 3) : "GP";
   el("namingPreview").textContent =
     `Preview: ${game}_${aspect}_${todayDateStr()}_${lang}_${hookName}_${gpName}_${state.target}s.mp4`;
 }

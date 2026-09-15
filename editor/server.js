@@ -304,7 +304,13 @@ function runExport(payload, cb) {
   const aspectKey = Object.prototype.hasOwnProperty.call(ASPECT_RATIOS, payload.aspect) ? payload.aspect : "9x16";
   const { w: canvasW, h: canvasH } = resolveAspect(aspectKey);
 
-  const slug = (p) => path.basename(p, path.extname(p)).replace(/[^A-Za-z0-9]+/g, "");
+  // Splits the filename into words on any non-alphanumeric run, then keeps
+  // only the first 3 -- keeps the naming convention's Hook/GP name segments
+  // short even when the source filename is long (e.g. a Higgsfield-generated
+  // hook's prompt-derived name). Never includes anything from the endcard
+  // or CTA -- the naming convention only ever reflects Hook and Gameplay.
+  const slug = (p) => path.basename(p, path.extname(p))
+    .split(/[^A-Za-z0-9]+/).filter(Boolean).slice(0, 3).join("");
   const gameSlug = String(payload.gameName || "").replace(/[^A-Za-z0-9]+/g, "") || "Game";
   const language = LANGUAGES.includes(String(payload.language || "").toUpperCase())
     ? String(payload.language).toUpperCase() : "EN";
@@ -761,7 +767,8 @@ function resolveHookDir() {
 }
 
 function slugifyPrompt(s) {
-  const slug = String(s || "").trim().split(/\s+/).slice(0, 6).join("_").replace(/[^A-Za-z0-9_]+/g, "");
+  const firstWord = String(s || "").trim().split(/\s+/)[0] || "";
+  const slug = firstWord.replace(/[^A-Za-z0-9]+/g, "");
   return slug || "Generated";
 }
 
@@ -822,14 +829,21 @@ const server = http.createServer((req, res) => {
           fs.writeFileSync(subsPath, wordsToSrt(words));
         }
 
-        const suffix = style === "burned" ? "_captioned_burned.mp4" : "_captioned.mp4";
-        const outName = srcName.replace(/\.mp4$/i, suffix);
-        const outPath = path.join(EXPORT_DIR, outName);
+        // Caption in place -- write to a temp file (ffmpeg can't read and
+        // write the same path at once) then replace the uncaptioned original,
+        // so exporting with captions checked leaves exactly one file behind,
+        // not both versions.
+        const tempName = srcName.replace(/\.mp4$/i, `_captioning_tmp_${crypto.randomBytes(4).toString("hex")}.mp4`);
+        const tempPath = path.join(EXPORT_DIR, tempName);
         const mux = style === "burned" ? burnInSubtitles : muxSoftSubtitles;
-        mux(srcPath, subsPath, outPath, (err) => {
+        mux(srcPath, subsPath, tempPath, (err) => {
           fs.unlinkSync(subsPath);
-          if (err) return sendJSON(res, 500, { error: err.message });
-          sendJSON(res, 200, { ok: true, captioned: true, file: outName, url: `/exports/${outName}` });
+          if (err) {
+            try { fs.unlinkSync(tempPath); } catch (e2) { /* nothing written */ }
+            return sendJSON(res, 500, { error: err.message });
+          }
+          fs.renameSync(tempPath, srcPath);
+          sendJSON(res, 200, { ok: true, captioned: true, file: srcName, url: `/exports/${srcName}` });
         });
       } catch (e) {
         sendJSON(res, 500, { error: e.message });
