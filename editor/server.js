@@ -417,6 +417,13 @@ function runExport(payload, cb) {
   args.push("-c:v", "libx264", "-preset", "medium", "-crf", "20");
   args.push("-c:a", "aac", "-b:a", "192k");
   args.push("-pix_fmt", "yuv420p");
+  // Hard cap: the export must never run past the target duration, not even
+  // by one frame, regardless of how the segments/transitions add up --
+  // trims the muxed output rather than relying on the segments already
+  // summing to exactly `target` (they usually run a little under anyway,
+  // since crossfading shortens the total by the transition overlap, but
+  // this is the actual guarantee, not just the usual case).
+  args.push("-t", target.toFixed(3));
   args.push(outPath);
 
   const proc = spawn("ffmpeg", args);
