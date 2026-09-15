@@ -5,6 +5,7 @@
 const http = require("http");
 const https = require("https");
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 const { spawn, spawnSync } = require("child_process");
 const crypto = require("crypto");
@@ -32,6 +33,15 @@ const PORT = process.env.PORT || 5175;
 
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY || "";
 const ELEVENLABS_STT_MODEL = process.env.ELEVENLABS_STT_MODEL || "scribe_v1";
+
+const MUSIC_PRESETS = {
+  upbeat: "upbeat energetic pop, bright and positive mood, mobile game ad background music, instrumental",
+  chill: "chill relaxed lo-fi, calm easygoing mood, mobile game ad background music, instrumental",
+  playful: "playful whimsical, fun and bouncy, casual mobile game ad background music, instrumental",
+  epic: "epic cinematic orchestral, big and triumphant, mobile game ad background music, instrumental",
+  suspenseful: "tense suspenseful, steadily building energy, mobile game ad background music, instrumental",
+};
+const MUSIC_MIX_VOLUME = 0.18; // background music level, mixed under the existing (full-volume) audio
 
 // Burned-in captions need libass (the `subtitles` filter), which the default
 // Homebrew `ffmpeg` formula ships without. `ffmpeg-full` (also in
@@ -435,6 +445,57 @@ async function transcribeWithElevenLabs(videoPath) {
   return (result.words || []).filter((w) => w.type === "word" && w.text && w.text.trim());
 }
 
+// --- ElevenLabs music generation -> background music mixed under the export's audio ---
+
+function generateMusicWithElevenLabs(prompt, durationMs) {
+  return new Promise((resolve, reject) => {
+    if (!ELEVENLABS_API_KEY) return reject(new Error("ELEVENLABS_API_KEY not set -- add it to .env in the project root"));
+    const body = Buffer.from(JSON.stringify({
+      prompt,
+      music_length_ms: Math.max(3000, Math.min(600000, Math.round(durationMs))),
+      force_instrumental: true,
+    }));
+    const req = https.request({
+      hostname: "api.elevenlabs.io", path: "/v1/music", method: "POST",
+      headers: { "xi-api-key": ELEVENLABS_API_KEY, "Content-Type": "application/json", "Content-Length": body.length },
+    }, (res) => {
+      const chunks = [];
+      res.on("data", (c) => chunks.push(c));
+      res.on("end", () => {
+        const data = Buffer.concat(chunks);
+        if (res.statusCode >= 200 && res.statusCode < 300) resolve(data);
+        else reject(new Error(`ElevenLabs music ${res.statusCode}: ${data.toString("utf8").slice(0, 500)}`));
+      });
+    });
+    req.on("error", reject);
+    req.write(body);
+    req.end();
+  });
+}
+
+// Mixes generated music (at MUSIC_MIX_VOLUME) under the video's existing audio.
+// normalize=0 keeps the existing audio at full volume -- amix's default
+// loudness normalization would otherwise quietly duck the original dialogue
+// just because a second, much quieter track was added alongside it.
+function mixMusicIntoVideo(videoPath, musicPath, outPath, cb) {
+  const args = [
+    "-y", "-loglevel", "error",
+    "-i", videoPath, "-i", musicPath,
+    "-filter_complex",
+    `[1:a]volume=${MUSIC_MIX_VOLUME}[music];[0:a][music]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[aout]`,
+    "-map", "0:v", "-map", "[aout]",
+    "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
+    outPath,
+  ];
+  const proc = spawn("ffmpeg", args);
+  let stderr = "";
+  proc.stderr.on("data", (d) => (stderr += d.toString()));
+  proc.on("close", (code) => {
+    if (code === 0) cb(null);
+    else cb(new Error(stderr || `ffmpeg exited ${code}`));
+  });
+}
+
 function srtTime(sec) {
   const ms = Math.round(sec * 1000);
   const h = Math.floor(ms / 3600000);
@@ -551,6 +612,26 @@ function burnInSubtitles(videoPath, assPath, outPath, cb) {
   });
 }
 
+// A generated music track is meant to be reused across every aspect-ratio
+// variant of one export (so picking a theme is a one-time cost, independent
+// of how many dimensions are checked), not regenerated per file. Tracks live
+// as temp files outside EXPORT_DIR, referenced by an opaque id the client
+// holds only for the duration of one export/batch-item run, and released
+// explicitly when done -- the TTL sweep is just a safety net for a client
+// that never got to call release (closed tab, crashed mid-export).
+const MUSIC_TRACKS = new Map(); // id -> { path, createdAt }
+const MUSIC_TRACK_TTL_MS = 30 * 60 * 1000;
+
+function cleanupStaleMusicTracks() {
+  const now = Date.now();
+  for (const [id, track] of MUSIC_TRACKS) {
+    if (now - track.createdAt > MUSIC_TRACK_TTL_MS) {
+      try { fs.unlinkSync(track.path); } catch (e) { /* already gone */ }
+      MUSIC_TRACKS.delete(id);
+    }
+  }
+}
+
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
 
@@ -620,6 +701,78 @@ const server = http.createServer((req, res) => {
       } catch (e) {
         sendJSON(res, 500, { error: e.message });
       }
+    });
+    return;
+  }
+
+  // Generates one music track for a chosen mood/duration and hands back an
+  // opaque id -- call this once per export (not once per aspect ratio), then
+  // pass the id to /api/music/apply for each rendered dimension.
+  if (url.pathname === "/api/music/generate" && req.method === "POST") {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", async () => {
+      let payload;
+      try { payload = JSON.parse(body); } catch (e) { return sendJSON(res, 400, { error: "bad json" }); }
+      const mood = MUSIC_PRESETS[payload.mood] ? payload.mood : "upbeat";
+      const durationSec = Number(payload.durationSec);
+      if (!(durationSec > 0)) return sendJSON(res, 400, { error: "durationSec required" });
+
+      cleanupStaleMusicTracks();
+      try {
+        const musicBuf = await generateMusicWithElevenLabs(MUSIC_PRESETS[mood], durationSec * 1000);
+        const trackId = crypto.randomBytes(12).toString("hex");
+        const tmpPath = path.join(os.tmpdir(), `cs-music-${trackId}.mp3`);
+        fs.writeFileSync(tmpPath, musicBuf);
+        MUSIC_TRACKS.set(trackId, { path: tmpPath, createdAt: Date.now() });
+        sendJSON(res, 200, { ok: true, trackId });
+      } catch (e) {
+        sendJSON(res, 500, { error: e.message });
+      }
+    });
+    return;
+  }
+
+  // Mixes a previously generated track (by id) under one exported file's audio.
+  if (url.pathname === "/api/music/apply" && req.method === "POST") {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      let payload;
+      try { payload = JSON.parse(body); } catch (e) { return sendJSON(res, 400, { error: "bad json" }); }
+      const srcName = payload.file;
+      const srcPath = srcName && path.join(EXPORT_DIR, srcName);
+      if (!srcPath || !srcPath.startsWith(EXPORT_DIR + path.sep) || !fs.existsSync(srcPath)) {
+        return sendJSON(res, 404, { error: "export not found" });
+      }
+      const track = MUSIC_TRACKS.get(payload.trackId);
+      if (!track || !fs.existsSync(track.path)) {
+        return sendJSON(res, 404, { error: "music track not found or expired" });
+      }
+
+      const outName = srcName.replace(/\.mp4$/i, "_music.mp4");
+      const outPath = path.join(EXPORT_DIR, outName);
+      mixMusicIntoVideo(srcPath, track.path, outPath, (err) => {
+        if (err) return sendJSON(res, 500, { error: err.message });
+        sendJSON(res, 200, { ok: true, musicked: true, file: outName, url: `/exports/${outName}` });
+      });
+    });
+    return;
+  }
+
+  // Best-effort cleanup once a client is done applying a track to every dimension.
+  if (url.pathname === "/api/music/release" && req.method === "POST") {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      let payload;
+      try { payload = JSON.parse(body); } catch (e) { payload = {}; }
+      const track = MUSIC_TRACKS.get(payload.trackId);
+      if (track) {
+        try { fs.unlinkSync(track.path); } catch (e) { /* already gone */ }
+        MUSIC_TRACKS.delete(payload.trackId);
+      }
+      sendJSON(res, 200, { ok: true });
     });
     return;
   }

@@ -165,6 +165,14 @@
             <option value="burned" selected>Burned-in</option>
             <option value="soft">Soft subtitle</option>
           </select>
+          <label class="caption-toggle"><input type="checkbox" id="musicToggle" /> Add music</label>
+          <select id="musicMood" class="caption-style">
+            <option value="upbeat" selected>Upbeat</option>
+            <option value="chill">Chill</option>
+            <option value="playful">Playful</option>
+            <option value="epic">Epic</option>
+            <option value="suspenseful">Suspenseful</option>
+          </select>
           <button class="secondary" id="previewAllBtn">▶ Preview full sequence</button>
           <button class="primary" id="exportBtn">Export</button>
         </div>
@@ -192,6 +200,14 @@
         <select id="batchCaptionStyle" class="caption-style">
           <option value="burned" selected>Burned-in</option>
           <option value="soft">Soft subtitle</option>
+        </select>
+        <label class="caption-toggle"><input type="checkbox" id="batchMusicToggle" /> Add music</label>
+        <select id="batchMusicMood" class="caption-style">
+          <option value="upbeat" selected>Upbeat</option>
+          <option value="chill">Chill</option>
+          <option value="playful">Playful</option>
+          <option value="epic">Epic</option>
+          <option value="suspenseful">Suspenseful</option>
         </select>
         <button class="primary" id="batchExportBtn">Batch export selected</button>
       </div>

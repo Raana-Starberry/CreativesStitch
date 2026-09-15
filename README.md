@@ -70,6 +70,10 @@ brew install ffmpeg-full
 
 The server auto-detects it at `/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg` (or `/usr/local/opt/...` on Intel Macs), or set `FFMPEG_FULL_BIN` to point at a specific binary. Without it, burned-in captioning will fail — soft subtitles still work with the regular `ffmpeg`.
 
+### Background music (ElevenLabs)
+
+Checking "Add music" (single export) or "Add music" in Batch export generates an instrumental track with [ElevenLabs Music](https://elevenlabs.io/docs/api-reference/music) in the mood picked from the dropdown (Upbeat, Chill, Playful, Epic, Suspenseful), sized to the export's length, and mixes it in quietly underneath the existing hook/gameplay/endcard audio -- it never replaces the original dialogue or sound effects. It's opt-in: leave it unchecked and exports are unaffected. One track is generated per export (per hook, in batch export) and reused across every checked aspect ratio -- picking 9:16 + 16:9 + 4:5 still only generates the music once, since dimension has no bearing on the music itself. Uses the same `ELEVENLABS_API_KEY` as captions (see above); no extra setup needed. If both "Caption this" and "Add music" are checked, captions are applied first and music is mixed into that result, so the final file (`..._captioned_music.mp4` or similar) has both. The uncaptioned/unmusicked original is always kept alongside.
+
 ## Batch script
 
 For generating every Hook x Gameplay combination without hand-tuning cuts:

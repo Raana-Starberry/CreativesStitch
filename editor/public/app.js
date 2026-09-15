@@ -334,16 +334,73 @@ async function captionExport(filename, style) {
   return data; // { ok, captioned, file?, url?, reason? }
 }
 
-async function maybeApplyCaption(file, url, toggleEl, styleEl, onStatus) {
-  if (!toggleEl.checked) return { url, file, label: "Done" };
-  if (onStatus) onStatus("Captioning...");
-  try {
-    const capData = await captionExport(file, styleEl.value);
-    if (capData.captioned) return { url: capData.url, file: capData.file, label: "Done (captioned)" };
-    return { url, file, label: `Done (${capData.reason || "no captions"})` };
-  } catch (e) {
-    return { url, file, label: `Done, captioning failed: ${e.message}` };
+// --- background music (ElevenLabs music generation -> mixed under the export's audio) ---
+// One track is generated per export/batch-item run (see generateMusicTrack)
+// and reused across every aspect-ratio variant via its trackId, so picking a
+// dimension has no bearing on the music -- it's the same track underneath.
+async function generateMusicTrack(mood, durationSec) {
+  const res = await fetch("/api/music/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ mood, durationSec }),
+  });
+  const data = await res.json();
+  if (!res.ok || data.error) throw new Error(data.error || "music generation failed");
+  return data.trackId;
+}
+
+async function musicApply(filename, trackId) {
+  const res = await fetch("/api/music/apply", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ file: filename, trackId }),
+  });
+  const data = await res.json();
+  if (!res.ok || data.error) throw new Error(data.error || "music mix failed");
+  return data; // { ok, musicked, file?, url? }
+}
+
+function releaseMusicTrack(trackId) {
+  if (!trackId) return;
+  fetch("/api/music/release", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ trackId }),
+  }).catch(() => {}); // best-effort cleanup -- the server's TTL sweep is the fallback
+}
+
+// Runs caption then music sequentially, each stage building on the previous
+// stage's output file, and reports one combined status label. `musicTrackId`
+// is generated once by the caller and shared across every aspect ratio;
+// `musicError` surfaces a generation failure on every row without retrying it.
+async function applyPostProcessing(file, url, opts, onStatus) {
+  let cur = { file, url };
+  const labelParts = [];
+
+  if (opts.captionToggle.checked) {
+    if (onStatus) onStatus("Captioning...");
+    try {
+      const capData = await captionExport(cur.file, opts.captionStyle.value);
+      if (capData.captioned) { cur = { file: capData.file, url: capData.url }; labelParts.push("captioned"); }
+      else labelParts.push(capData.reason || "no captions");
+    } catch (e) {
+      labelParts.push(`captioning failed: ${e.message}`);
+    }
   }
+
+  if (opts.musicTrackId) {
+    if (onStatus) onStatus("Adding music...");
+    try {
+      const musicData = await musicApply(cur.file, opts.musicTrackId);
+      if (musicData.musicked) { cur = { file: musicData.file, url: musicData.url }; labelParts.push("music"); }
+    } catch (e) {
+      labelParts.push(`music failed: ${e.message}`);
+    }
+  } else if (opts.musicError) {
+    labelParts.push(`music failed: ${opts.musicError}`);
+  }
+
+  return { ...cur, label: labelParts.length ? `Done (${labelParts.join(", ")})` : "Done" };
 }
 
 async function revealFile(name) {
@@ -429,12 +486,29 @@ el("exportBtn").addEventListener("click", async () => {
   const hookPayload = { rel: state.hook.rel, in: state.hook.in, out: state.hook.out, speed: state.hook.speed };
   const gpPayload = { rel: state.gp.rel, in: state.gp.in, out: state.gp.out, speed: state.gp.speed };
 
+  // Generate the music track once, up front -- it's shared across every
+  // aspect ratio below rather than regenerated per dimension.
+  let musicTrackId = null, musicError = null;
+  if (el("musicToggle").checked) {
+    status.textContent = "Generating music...";
+    const totalSec = hookOutputLen() + gpOutputLen() + endLen();
+    try {
+      musicTrackId = await generateMusicTrack(el("musicMood").value, totalSec);
+    } catch (e) {
+      musicError = e.message;
+    }
+    status.textContent = "Rendering... this can take a bit for longer gameplay segments.";
+  }
+
   for (const a of aspects) {
     const row = rows[a];
     row.innerHTML = `<span class="tag">${a}</span><span class="state">Rendering...</span>`;
     try {
       const data = await exportOne(hookPayload, gpPayload, a);
-      const result = await maybeApplyCaption(data.file, data.url, el("captionToggle"), el("captionStyle"), (s) => {
+      const result = await applyPostProcessing(data.file, data.url, {
+        captionToggle: el("captionToggle"), captionStyle: el("captionStyle"),
+        musicTrackId, musicError,
+      }, (s) => {
         row.innerHTML = `<span class="tag">${a}</span><span class="state">${s}</span>`;
       });
       row.className = "row state-done";
@@ -445,6 +519,7 @@ el("exportBtn").addEventListener("click", async () => {
       row.innerHTML = `<span class="tag">${a}</span><span class="state">Error: ${e.message}</span>`;
     }
   }
+  releaseMusicTrack(musicTrackId);
 
   status.className = "status-line ok";
   status.textContent = `Done: ${aspects.length} format${aspects.length > 1 ? "s" : ""} exported`;
@@ -680,13 +755,28 @@ el("batchExportBtn").addEventListener("click", async () => {
       continue;
     }
 
+    // One music track per hook, shared across that hook's aspect ratios below
+    // (gameplay is auto-fit to hit state.target exactly, so every dimension
+    // for this hook has the same duration and can reuse the same track).
+    let musicTrackId = null, musicError = null;
+    if (el("batchMusicToggle").checked) {
+      try {
+        musicTrackId = await generateMusicTrack(el("batchMusicMood").value, state.target);
+      } catch (e) {
+        musicError = e.message;
+      }
+    }
+
     for (const a of aspects) {
       const row = rows[rowKey(idx, a)];
       row.className = "batch-row state-rendering";
       row.innerHTML = `<span class="name">${h.name}<span class="tag">${a}</span></span><span class="state">Rendering...</span>`;
       try {
         const data = await exportOne(hookPayload, gpPayload, a);
-        const result = await maybeApplyCaption(data.file, data.url, el("batchCaptionToggle"), el("batchCaptionStyle"), (s) => {
+        const result = await applyPostProcessing(data.file, data.url, {
+          captionToggle: el("batchCaptionToggle"), captionStyle: el("batchCaptionStyle"),
+          musicTrackId, musicError,
+        }, (s) => {
           row.innerHTML = `<span class="name">${h.name}<span class="tag">${a}</span></span><span class="state">${s}</span>`;
         });
         row.className = "batch-row state-done";
@@ -697,6 +787,7 @@ el("batchExportBtn").addEventListener("click", async () => {
         row.innerHTML = `<span class="name">${h.name}<span class="tag">${a}</span></span><span class="state">Error: ${e.message}</span>`;
       }
     }
+    releaseMusicTrack(musicTrackId);
   }
   el("batchExportBtn").disabled = false;
   loadExportsList();
