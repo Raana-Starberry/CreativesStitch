@@ -108,6 +108,57 @@ main {
   gap: 10px;
 }
 
+.hook-source-toggle {
+  display: flex;
+  gap: 6px;
+  background: var(--panel-2);
+  border-radius: 8px;
+  padding: 3px;
+  align-self: flex-start;
+}
+.hook-source-toggle button {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  padding: 5px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.hook-source-toggle button.active {
+  background: var(--accent);
+  color: white;
+}
+
+.hook-generate {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.hook-gen-prompt {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
+}
+.hook-gen-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: space-between;
+}
+.hook-gen-row label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
 .segment h2 {
   font-size: 13px;
   margin: 0;

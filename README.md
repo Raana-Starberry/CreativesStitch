@@ -74,6 +74,21 @@ The server auto-detects it at `/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg` (or `/u
 
 Checking "Add music" (single export) or "Add music" in Batch export generates an instrumental track with [ElevenLabs Music](https://elevenlabs.io/docs/api-reference/music) in the mood picked from the dropdown (Upbeat, Chill, Playful, Epic, Suspenseful), sized to the export's length, and mixes it in quietly underneath the existing hook/gameplay/endcard audio -- it never replaces the original dialogue or sound effects. It's opt-in: leave it unchecked and exports are unaffected. One track is generated per export (per hook, in batch export) and reused across every checked aspect ratio -- picking 9:16 + 16:9 + 4:5 still only generates the music once, since dimension has no bearing on the music itself. Uses the same `ELEVENLABS_API_KEY` as captions (see above); no extra setup needed. If both "Caption this" and "Add music" are checked, captions are applied first and music is mixed into that result, so the final file (`..._captioned_music.mp4` or similar) has both. The uncaptioned/unmusicked original is always kept alongside.
 
+### Generating a Hook with Higgsfield
+
+The Hook segment has a toggle at the top: **Existing** (pick from the `Hook/` folder as usual) or **Generate with Higgsfield**. In generate mode, describe the clip in the text box, pick a duration (5s or 10s), and hit "Generate hook" -- it submits a text-to-video request to [Higgsfield](https://docs.higgsfield.ai/docs) (Kling 2.5 Turbo Pro), polls until it's done (typically under a couple of minutes), downloads the result straight into the `Hook/` folder, and selects it as the current hook. From that point on it's just a normal hook clip -- reusable from the "Existing" dropdown on future runs, trimmable, speed-adjustable, same as anything else.
+
+Setup: add to `.env` (separate credentials from any Higgsfield MCP/Claude Code connection):
+
+```
+HIGGSFIELD_API_KEY_ID=your_key_id
+HIGGSFIELD_API_KEY_SECRET=your_key_secret
+```
+
+Get these from [Higgsfield Cloud](https://cloud.higgsfield.ai). Generation requires account credits -- an auth failure shows as an invalid-credentials error, while an out-of-credits account shows a `402`/`403` error in the status line instead of a video.
+
+Kling 2.5 Turbo Pro generates natively in 16:9; the result is cropped like any other Hook source when exporting to 9:16/4:5. Only text-to-video is wired up for now (no image generation, no image-to-video).
+
 ## Batch script
 
 For generating every Hook x Gameplay combination without hand-tuning cuts:

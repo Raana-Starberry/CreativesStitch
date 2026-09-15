@@ -44,32 +44,51 @@
     <div class="segments" id="sectionSegments">
       <section class="segment" id="hookSegment">
         <h2><span class="dot hook"></span>Hook</h2>
-        <select id="hookSelect"></select>
-        <div class="preview"><video id="hookVideo" playsinline></video></div>
-        <div class="trim-slider" id="hookTrim">
-          <div class="trim-track"></div>
-          <div class="trim-fill"></div>
-          <input type="range" class="range-in" min="0" max="1" step="0.01" />
-          <input type="range" class="range-out" min="0" max="1" step="0.01" />
+        <div class="hook-source-toggle" id="hookSourceToggle">
+          <button data-source="existing" class="active">Existing</button>
+          <button data-source="generate">Generate with Higgsfield</button>
         </div>
-        <div class="numbers">
-          <span>In: <b id="hookInLabel">0.0s</b></span>
-          <span>Out: <b id="hookOutLabel">0.0s</b></span>
-          <span>Output: <b id="hookLenLabel">0.0s</b></span>
+        <div class="hook-generate" id="hookGenerate" style="display:none">
+          <textarea id="hookGenPrompt" class="hook-gen-prompt" rows="3" placeholder="Describe the video, e.g. &quot;A woman excitedly showing off a garden puzzle game on her phone, bright daylight&quot;"></textarea>
+          <div class="hook-gen-row">
+            <label>Duration
+              <select id="hookGenDuration">
+                <option value="5" selected>5s</option>
+                <option value="10">10s</option>
+              </select>
+            </label>
+            <button class="primary" id="hookGenBtn">Generate hook</button>
+          </div>
+          <div class="status-line" id="hookGenStatus"></div>
         </div>
-        <div class="speed-row">
-          <label>Speed</label>
-          <input type="range" id="hookSpeedRange" min="0.25" max="3" step="0.05" value="1" />
-          <span class="speed-label" id="hookSpeedLabel">1.00x</span>
-        </div>
-        <div class="speed-presets" id="hookSpeedPresets">
-          <button data-speed="0.5">0.5x</button>
-          <button data-speed="1" class="active">1x</button>
-          <button data-speed="1.5">1.5x</button>
-          <button data-speed="2">2x</button>
-        </div>
-        <div class="controls-row">
-          <button class="secondary" id="hookPlayBtn">▶ Preview trim</button>
+        <div id="hookExistingPanel">
+          <select id="hookSelect"></select>
+          <div class="preview"><video id="hookVideo" playsinline></video></div>
+          <div class="trim-slider" id="hookTrim">
+            <div class="trim-track"></div>
+            <div class="trim-fill"></div>
+            <input type="range" class="range-in" min="0" max="1" step="0.01" />
+            <input type="range" class="range-out" min="0" max="1" step="0.01" />
+          </div>
+          <div class="numbers">
+            <span>In: <b id="hookInLabel">0.0s</b></span>
+            <span>Out: <b id="hookOutLabel">0.0s</b></span>
+            <span>Output: <b id="hookLenLabel">0.0s</b></span>
+          </div>
+          <div class="speed-row">
+            <label>Speed</label>
+            <input type="range" id="hookSpeedRange" min="0.25" max="3" step="0.05" value="1" />
+            <span class="speed-label" id="hookSpeedLabel">1.00x</span>
+          </div>
+          <div class="speed-presets" id="hookSpeedPresets">
+            <button data-speed="0.5">0.5x</button>
+            <button data-speed="1" class="active">1x</button>
+            <button data-speed="1.5">1.5x</button>
+            <button data-speed="2">2x</button>
+          </div>
+          <div class="controls-row">
+            <button class="secondary" id="hookPlayBtn">▶ Preview trim</button>
+          </div>
         </div>
       </section>
 

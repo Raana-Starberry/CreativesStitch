@@ -901,6 +901,66 @@ function initSectionDragHandles() {
   });
 }
 
+// --- Hook source: existing asset vs. generate a new one with Higgsfield ---
+document.querySelectorAll("#hookSourceToggle button").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("#hookSourceToggle button").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    const generating = btn.dataset.source === "generate";
+    el("hookGenerate").style.display = generating ? "flex" : "none";
+    el("hookExistingPanel").style.display = generating ? "none" : "block";
+  });
+});
+
+el("hookGenBtn").addEventListener("click", async () => {
+  const btn = el("hookGenBtn");
+  const status = el("hookGenStatus");
+  const prompt = el("hookGenPrompt").value.trim();
+  if (!prompt) {
+    status.className = "status-line error";
+    status.textContent = "Describe the video first.";
+    return;
+  }
+  const duration = parseInt(el("hookGenDuration").value, 10);
+
+  btn.disabled = true;
+  status.className = "status-line";
+  status.textContent = "Generating with Higgsfield... this can take a minute or two.";
+
+  try {
+    const res = await fetch("/api/higgsfield/generate-hook", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt, duration }),
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || "generation failed");
+
+    // The new clip becomes a normal hook asset -- same array, same loadHook()
+    // path as picking one from the dropdown.
+    const item = { name: data.name, rel: data.rel, isImage: false, duration: data.duration, width: data.width, height: data.height };
+    state.assets.hooks.unshift(item);
+    populateSelect(el("hookSelect"), state.assets.hooks);
+    el("hookSelect").value = 0;
+    loadHook(item);
+    renderBatchHookList();
+
+    status.className = "status-line ok";
+    status.textContent = `Done: added "${data.name}" as a new hook.`;
+    el("hookGenPrompt").value = "";
+
+    document.querySelectorAll("#hookSourceToggle button").forEach((b) => b.classList.remove("active"));
+    document.querySelector('#hookSourceToggle button[data-source="existing"]').classList.add("active");
+    el("hookGenerate").style.display = "none";
+    el("hookExistingPanel").style.display = "block";
+  } catch (e) {
+    status.className = "status-line error";
+    status.textContent = `Generation failed: ${e.message}`;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 // --- boot ---
 async function init() {
   const res = await fetch("/api/assets");
